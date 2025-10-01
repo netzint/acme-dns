@@ -14,6 +14,7 @@ type ACMETxt struct {
 	Password string
 	ACMETxtPost
 	AllowFrom cidrslice
+	Fulldomain string `json:"fulldomain"`
 }
 
 // ACMETxtPost holds the DNS part of the ACMETxt struct
@@ -28,6 +29,13 @@ type cidrslice []string
 func (c *cidrslice) JSON() string {
 	ret, _ := json.Marshal(c.ValidEntries())
 	return string(ret)
+}
+
+func (c *cidrslice) Unmarshal(data string) error {
+	if data == "" || data == "[]" {
+		return nil
+	}
+	return json.Unmarshal([]byte(data), c)
 }
 
 func (c *cidrslice) isValid() error {

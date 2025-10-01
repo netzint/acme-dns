@@ -76,4 +76,5 @@ type database interface {
 	GetBackend() *sql.DB
 	SetBackend(*sql.DB)
 	Close()
+	GetAllDomains() ([]ACMETxt, error)
 }

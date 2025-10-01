@@ -1,0 +1,13 @@
+version: '3'
+services:
+  acme-dns:
+    build: .
+    ports:
+      - "8080:80"
+      - "53:53/udp"
+      - "53:53/tcp"
+    volumes:
+      - ./config.cfg:/etc/acme-dns/config.cfg:ro
+      - ./data:/var/lib/acme-dns
+    environment:
+      - ACME_DNS_DEBUG=true

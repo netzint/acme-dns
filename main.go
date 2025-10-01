@@ -127,6 +127,7 @@ func startHTTPAPI(errChan chan error, config DNSConfig, dnsservers []*DNSServer)
 		api.POST("/register", webRegisterPost)
 	}
 	api.POST("/update", Auth(webUpdatePost))
+	api.GET("/domains", webGetDomains)
 	api.GET("/health", healthCheck)
 
 	host := Config.API.IP + ":" + Config.API.Port

@@ -111,3 +111,58 @@ func webUpdatePost(w http.ResponseWriter, r *http.Request, _ httprouter.Params) 
 func healthCheck(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	w.WriteHeader(http.StatusOK)
 }
+
+// DomainResponse is a struct for domain list response JSON
+type DomainResponse struct {
+	Username   string   `json:"username"`
+	Fulldomain string   `json:"fulldomain"`
+	Subdomain  string   `json:"subdomain"`
+	Allowfrom  []string `json:"allowfrom"`
+	CreatedAt  string   `json:"created_at,omitempty"`
+	UpdatedAt  string   `json:"updated_at,omitempty"`
+}
+
+// webGetDomains returns all registered domains from the database
+func webGetDomains(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	// Simple auth check - you might want to add proper authentication here
+	apiKey := r.Header.Get("X-Api-Key")
+	if apiKey == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write(jsonError("unauthorized"))
+		return
+	}
+
+	domains, err := DB.GetAllDomains()
+	if err != nil {
+		log.WithFields(log.Fields{"error": err.Error()}).Error("Error fetching domains")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write(jsonError("db_error"))
+		return
+	}
+
+	var response []DomainResponse
+	for _, domain := range domains {
+		resp := DomainResponse{
+			Username:   domain.Username.String(),
+			Fulldomain: domain.Fulldomain,
+			Subdomain:  domain.Subdomain,
+			Allowfrom:  domain.AllowFrom.ValidEntries(),
+		}
+		response = append(response, resp)
+	}
+
+	respJSON, err := json.Marshal(response)
+	if err != nil {
+		log.WithFields(log.Fields{"error": err.Error()}).Error("Error marshaling domains")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write(jsonError("json_error"))
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(respJSON)
+}

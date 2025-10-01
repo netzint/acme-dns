@@ -209,6 +209,37 @@ func (d *acmedb) Register(afrom cidrslice) (ACMETxt, error) {
 	return a, err
 }
 
+func (d *acmedb) GetAllDomains() ([]ACMETxt, error) {
+	d.Mutex.Lock()
+	defer d.Mutex.Unlock()
+	var results []ACMETxt
+	getSQL := `
+	SELECT Username, Password, Subdomain, AllowFrom
+	FROM records
+	`
+	rows, err := d.DB.Query(getSQL)
+	if err != nil {
+		return results, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		txt := ACMETxt{}
+		afrom := ""
+		err = rows.Scan(&txt.Username, &txt.Password, &txt.Subdomain, &afrom)
+		if err != nil {
+			log.WithFields(log.Fields{"error": err.Error()}).Error("Database error in GetAllDomains")
+			return results, err
+		}
+		txt.AllowFrom.Unmarshal(afrom)
+		// Clear password hash for security
+		txt.Password = ""
+		// Add fulldomain
+		txt.Fulldomain = txt.Subdomain + "." + Config.General.Domain
+		results = append(results, txt)
+	}
+	return results, nil
+}
+
 func (d *acmedb) GetByUsername(u uuid.UUID) (ACMETxt, error) {
 	d.Mutex.Lock()
 	defer d.Mutex.Unlock()
