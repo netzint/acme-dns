@@ -1,0 +1,85 @@
+<h2 mat-dialog-title>Register New ACME-DNS Domain</h2>
+
+<mat-dialog-content class="dialog-content">
+  <div *ngIf="loading" class="loading-container">
+    <mat-spinner></mat-spinner>
+    <p>Registering new domain...</p>
+  </div>
+
+  <div *ngIf="error" class="error-message">
+    <mat-icon color="warn">error</mat-icon>
+    <p>{{ error }}</p>
+    <button mat-button color="primary" (click)="registerDomain()">
+      <mat-icon>refresh</mat-icon>
+      Retry
+    </button>
+  </div>
+
+  <div *ngIf="newDomain && !loading" class="domain-info">
+    <p class="success-message">
+      <mat-icon color="primary">check_circle</mat-icon>
+      Domain successfully registered!
+    </p>
+    
+    <mat-list>
+      <mat-list-item>
+        <span matListItemTitle>Full Domain:</span>
+        <span matListItemLine class="value">
+          {{ newDomain.fulldomain }}
+          <button mat-icon-button (click)="copyToClipboard(newDomain.fulldomain, 'Full domain')">
+            <mat-icon>content_copy</mat-icon>
+          </button>
+        </span>
+      </mat-list-item>
+
+      <mat-list-item>
+        <span matListItemTitle>Subdomain:</span>
+        <span matListItemLine class="value">
+          {{ newDomain.subdomain }}
+          <button mat-icon-button (click)="copyToClipboard(newDomain.subdomain, 'Subdomain')">
+            <mat-icon>content_copy</mat-icon>
+          </button>
+        </span>
+      </mat-list-item>
+
+      <mat-list-item>
+        <span matListItemTitle>Username:</span>
+        <span matListItemLine class="value">
+          {{ newDomain.username }}
+          <button mat-icon-button (click)="copyToClipboard(newDomain.username, 'Username')">
+            <mat-icon>content_copy</mat-icon>
+          </button>
+        </span>
+      </mat-list-item>
+
+      <mat-list-item>
+        <span matListItemTitle>Password:</span>
+        <span matListItemLine class="value password">
+          {{ newDomain.password }}
+          <button mat-icon-button (click)="copyToClipboard(newDomain.password, 'Password')">
+            <mat-icon>content_copy</mat-icon>
+          </button>
+        </span>
+      </mat-list-item>
+    </mat-list>
+
+    <div class="info-box">
+      <mat-icon>info</mat-icon>
+      <p>Save these credentials! They are required for updating TXT records.</p>
+    </div>
+
+    <div class="copy-all">
+      <button mat-button color="accent" (click)="copyAllAsJson()">
+        <mat-icon>content_copy</mat-icon>
+        Copy All as JSON
+      </button>
+    </div>
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close *ngIf="!newDomain">Cancel</button>
+  <button mat-raised-button color="primary" (click)="close()" *ngIf="newDomain">
+    Done
+  </button>
+</mat-dialog-actions>

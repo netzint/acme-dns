@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  acme-dns:
+    image: ghcr.io/netzint/acme-dns:latest
+    container_name: acme-dns
+    restart: unless-stopped
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "443:443"  # API with TLS
+    volumes:
+      - ./config:/etc/acme-dns:ro
+      - ./data:/var/lib/acme-dns
+    networks:
+      - acme-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  acme-dns-ui:
+    image: ghcr.io/netzint/acme-dns-ui:latest
+    container_name: acme-dns-ui
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    environment:
+      - ACME_DNS_API_URL=http://acme-dns:80
+    depends_on:
+      - acme-dns
+    networks:
+      - acme-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+networks:
+  acme-network:
+    driver: bridge

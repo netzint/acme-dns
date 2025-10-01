@@ -1,0 +1,11 @@
+{
+  "/api/*": {
+    "target": "https://acme-dns.netzint.de",
+    "secure": true,
+    "changeOrigin": true,
+    "pathRewrite": {
+      "^/api": ""
+    },
+    "logLevel": "debug"
+  }
+}

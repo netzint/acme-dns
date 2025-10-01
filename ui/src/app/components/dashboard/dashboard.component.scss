@@ -1,0 +1,73 @@
+.spacer {
+  flex: 1 1 auto;
+}
+
+.server-status {
+  margin-right: 20px;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 14px;
+  background-color: #666;
+  
+  &.online {
+    background-color: #4caf50;
+  }
+  
+  &.offline {
+    background-color: #f44336;
+  }
+}
+
+.dashboard-container {
+  padding: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.actions-card {
+  margin-bottom: 20px;
+  
+  mat-card-content {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+}
+
+.refresh-btn {
+  margin-left: 10px;
+}
+
+.domains-card {
+  .loading-spinner {
+    display: flex;
+    justify-content: center;
+    padding: 40px;
+  }
+  
+  .domains-table {
+    width: 100%;
+    
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+    
+    button[mat-icon-button] {
+      width: 30px;
+      height: 30px;
+      line-height: 30px;
+    }
+  }
+  
+  .no-domains {
+    text-align: center;
+    padding: 40px;
+    color: #666;
+    
+    p {
+      margin: 10px 0;
+    }
+  }
+}

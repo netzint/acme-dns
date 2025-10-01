@@ -1,0 +1,104 @@
+<mat-toolbar color="primary">
+  <span>ACME-DNS Management</span>
+  <span class="spacer"></span>
+  <span class="server-status" [class.online]="serverStatus === 'online'" [class.offline]="serverStatus === 'offline'">
+    Server: {{ serverStatus }}
+  </span>
+  <button mat-icon-button (click)="checkServerHealth()" matTooltip="Refresh server status">
+    <mat-icon>refresh</mat-icon>
+  </button>
+  <button mat-button (click)="logout()">
+    <mat-icon>logout</mat-icon>
+    Logout
+  </button>
+</mat-toolbar>
+
+<div class="dashboard-container">
+  <mat-card class="actions-card">
+    <mat-card-header>
+      <mat-card-title>Domain Management</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <button mat-raised-button color="accent" (click)="openRegisterDialog()">
+        <mat-icon>add</mat-icon>
+        Register New Domain
+      </button>
+      <button mat-button (click)="loadDomains()" class="refresh-btn">
+        <mat-icon>refresh</mat-icon>
+        Refresh List
+      </button>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card class="domains-card">
+    <mat-card-header>
+      <mat-card-title>Registered Domains ({{ domains.length }})</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div *ngIf="loading" class="loading-spinner">
+        <mat-spinner></mat-spinner>
+      </div>
+      
+      <table mat-table [dataSource]="domains" class="domains-table" *ngIf="!loading">
+        <ng-container matColumnDef="fulldomain">
+          <th mat-header-cell *matHeaderCellDef>Full Domain</th>
+          <td mat-cell *matCellDef="let domain">
+            {{ domain.fulldomain }}
+            <button mat-icon-button (click)="copyToClipboard(domain.fulldomain)" matTooltip="Copy">
+              <mat-icon>content_copy</mat-icon>
+            </button>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="subdomain">
+          <th mat-header-cell *matHeaderCellDef>Subdomain</th>
+          <td mat-cell *matCellDef="let domain">{{ domain.subdomain }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="username">
+          <th mat-header-cell *matHeaderCellDef>Username</th>
+          <td mat-cell *matCellDef="let domain">
+            {{ domain.username }}
+            <button mat-icon-button (click)="copyToClipboard(domain.username)" matTooltip="Copy">
+              <mat-icon>content_copy</mat-icon>
+            </button>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="created_at">
+          <th mat-header-cell *matHeaderCellDef>Created</th>
+          <td mat-cell *matCellDef="let domain">
+            {{ domain.created_at ? (domain.created_at | date:'short') : '-' }}
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="last_active">
+          <th mat-header-cell *matHeaderCellDef>Last Active</th>
+          <td mat-cell *matCellDef="let domain">
+            {{ domain.last_active ? (domain.last_active | date:'short') : 'Never' }}
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="actions">
+          <th mat-header-cell *matHeaderCellDef>Actions</th>
+          <td mat-cell *matCellDef="let domain">
+            <button mat-icon-button (click)="copyToClipboard(domain.password)" matTooltip="Copy Password">
+              <mat-icon>key</mat-icon>
+            </button>
+            <button mat-icon-button color="warn" (click)="deleteDomain(domain)" matTooltip="Delete">
+              <mat-icon>delete</mat-icon>
+            </button>
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+      </table>
+
+      <div *ngIf="!loading && domains.length === 0" class="no-domains">
+        <p>No domains registered yet.</p>
+        <p>Click "Register New Domain" to get started.</p>
+      </div>
+    </mat-card-content>
+  </mat-card>
+</div>
