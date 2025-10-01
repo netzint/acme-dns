@@ -1,51 +1,67 @@
-# Build stage
-FROM golang:1.21-alpine AS builder
+# Build stage for Go backend
+FROM golang:1.21-alpine AS go-builder
 
-# Install build dependencies
 RUN apk add --no-cache gcc musl-dev git
 
-# Set working directory
 WORKDIR /build
 
-# Copy go mod files first for better caching
+# Copy go mod files
 COPY go.mod go.sum ./
 RUN go mod download
 
 # Copy source code
 COPY . .
 
-# Build the binary with optimizations
+# Build the binary
 RUN CGO_ENABLED=1 GOOS=linux go build \
-    -ldflags="-w -s -X main.version=${VERSION:-dev} -X main.commit=${COMMIT:-unknown}" \
+    -ldflags="-w -s" \
     -a -installsuffix cgo \
     -o acme-dns .
 
-# Runtime stage
+# Build stage for Angular frontend
+FROM node:20-alpine AS ui-builder
+
+WORKDIR /app
+
+# Copy UI package files
+COPY ui/package*.json ./
+RUN npm ci
+
+# Copy UI source code
+COPY ui/ .
+
+# Build the Angular app without base-href (API is on same host)
+RUN npm run build
+
+# Final stage - Runtime
 FROM alpine:3.19
 
 # Install runtime dependencies
 RUN apk --no-cache add ca-certificates && \
     update-ca-certificates
 
-# Create non-root user
+# Create user
 RUN addgroup -g 1000 -S acmedns && \
     adduser -u 1000 -S acmedns -G acmedns
 
-# Create necessary directories
-RUN mkdir -p /etc/acme-dns /var/lib/acme-dns && \
+# Create directories
+RUN mkdir -p /etc/acme-dns /var/lib/acme-dns /usr/share/acme-dns-ui && \
     chown -R acmedns:acmedns /etc/acme-dns /var/lib/acme-dns
 
-# Copy binary from builder
-COPY --from=builder /build/acme-dns /usr/local/bin/acme-dns
+# Copy backend binary
+COPY --from=go-builder /build/acme-dns /usr/local/bin/acme-dns
 RUN chmod +x /usr/local/bin/acme-dns
 
-# Copy default config if exists
-COPY --chown=acmedns:acmedns config.cfg /etc/acme-dns/config.cfg.example
+# Copy frontend files
+COPY --from=ui-builder /app/dist/acme-dns-ui/browser /usr/share/acme-dns-ui
+RUN chown -R acmedns:acmedns /usr/share/acme-dns-ui
+
+# Copy config
+COPY config.cfg /etc/acme-dns/config.cfg.example
 
 # Switch to non-root user
 USER acmedns
 
-# Set working directory
 WORKDIR /var/lib/acme-dns
 
 # Health check
@@ -58,6 +74,6 @@ EXPOSE 53/tcp 53/udp 80/tcp 443/tcp
 # Volumes
 VOLUME ["/etc/acme-dns", "/var/lib/acme-dns"]
 
-# Entry point
+# Start acme-dns
 ENTRYPOINT ["/usr/local/bin/acme-dns"]
 CMD ["-c", "/etc/acme-dns/config.cfg"]

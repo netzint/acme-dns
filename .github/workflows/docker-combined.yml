@@ -1,4 +1,4 @@
-name: Build UI Docker Image
+name: Build Combined Docker Image
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: netzint/acme-dns-ui
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build:
@@ -43,12 +43,13 @@ jobs:
             type=ref,event=branch
             type=ref,event=tag
             type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=combined,enable={{is_default_branch}}
 
-      - name: Build and push
+      - name: Build and push combined image
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile
+          file: ./Dockerfile.combined
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
@@ -56,4 +57,5 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            ACME_DNS_API_URL=https://acme-dns.netzint.de
+            VERSION=${{ github.ref_name }}
+            COMMIT=${{ github.sha }}

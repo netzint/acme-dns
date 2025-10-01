@@ -1,15 +1,15 @@
 version: '3.8'
 
 services:
-  acme-dns:
-    image: ghcr.io/netzint/acme-dns:latest
-    container_name: acme-dns
+  acme-dns-with-ui:
+    image: ghcr.io/netzint/acme-dns:combined
+    container_name: acme-dns-with-ui
     restart: unless-stopped
     ports:
       - "53:53/tcp"
       - "53:53/udp"
-      - "80:80"
-      - "443:443"
+      - "80:80"      # HTTP API + UI
+      - "443:443"    # HTTPS API + UI (if TLS enabled)
     volumes:
       - ./config:/etc/acme-dns:ro
       - ./data:/var/lib/acme-dns
@@ -25,12 +25,3 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    networks:
-      - acme-dns-net
-
-networks:
-  acme-dns-net:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/24

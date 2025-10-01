@@ -12,6 +12,11 @@ export class AcmeDnsService {
   private apiUrl = environment.apiUrl;
   private domains: Map<string, AcmeDomain> = new Map();
   private apiKey = 'acme-dns-ui-key'; // You can make this configurable
+  
+  private getApiUrl(endpoint: string): string {
+    // If apiUrl is empty, use same origin
+    return this.apiUrl ? `${this.apiUrl}${endpoint}` : endpoint;
+  }
 
   constructor(private http: HttpClient) {
     this.loadDomainsFromServer();
@@ -51,7 +56,7 @@ export class AcmeDnsService {
       'X-Api-Key': this.apiKey
     });
 
-    return this.http.get<any[]>(`${this.apiUrl}/domains`, { headers }).pipe(
+    return this.http.get<any[]>(this.getApiUrl('/domains'), { headers }).pipe(
       map(response => {
         // Clear existing domains
         this.domains.clear();
@@ -96,7 +101,7 @@ export class AcmeDnsService {
   }
 
   registerDomain(): Observable<AcmeDomain> {
-    return this.http.post<AcmeDomain>(`${this.apiUrl}/register`, {}).pipe(
+    return this.http.post<AcmeDomain>(this.getApiUrl('/register'), {}).pipe(
       map(response => {
         const domain: AcmeDomain = {
           ...response,
@@ -120,7 +125,7 @@ export class AcmeDnsService {
       'X-Api-Key': domain.password
     });
 
-    return this.http.post(`${this.apiUrl}/update`, {
+    return this.http.post(this.getApiUrl('/update'), {
       subdomain: domain.subdomain,
       txt: txt
     }, { headers }).pipe(
@@ -155,7 +160,7 @@ export class AcmeDnsService {
   }
 
   getHealth(): Observable<any> {
-    return this.http.get(`${this.apiUrl}/health`).pipe(
+    return this.http.get(this.getApiUrl('/health')).pipe(
       catchError(error => {
         console.error('Health check failed:', error);
         return of({ status: 'error', message: 'Server unreachable' });

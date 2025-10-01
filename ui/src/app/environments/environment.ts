@@ -1,4 +1,4 @@
 export const environment = {
   production: false,
-  apiUrl: '/api'
+  apiUrl: ''  // Same origin, no prefix needed
 };

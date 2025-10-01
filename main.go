@@ -129,6 +129,16 @@ func startHTTPAPI(errChan chan error, config DNSConfig, dnsservers []*DNSServer)
 	api.POST("/update", Auth(webUpdatePost))
 	api.GET("/domains", webGetDomains)
 	api.GET("/health", healthCheck)
+	
+	// Optional: Serve UI if directory exists
+	uiPath := "/usr/share/acme-dns-ui"
+	if _, err := os.Stat(uiPath); err == nil {
+		// UI files exist, serve them
+		api.ServeFiles("/ui/*filepath", http.Dir(uiPath))
+		api.GET("/", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+			http.Redirect(w, r, "/ui/", http.StatusMovedPermanently)
+		})
+	}
 
 	host := Config.API.IP + ":" + Config.API.Port
 
