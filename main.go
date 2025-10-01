@@ -133,10 +133,43 @@ func startHTTPAPI(errChan chan error, config DNSConfig, dnsservers []*DNSServer)
 	// Optional: Serve UI if directory exists
 	uiPath := "/usr/share/acme-dns-ui"
 	if _, err := os.Stat(uiPath); err == nil {
-		// UI files exist, serve them
-		api.ServeFiles("/ui/*filepath", http.Dir(uiPath))
+		// UI files exist, serve them with proper MIME types
+		api.GET("/ui/*filepath", func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+			filepath := ps.ByName("filepath")
+			if filepath == "/" {
+				filepath = "/index.html"
+			}
+			
+			// Set proper content type based on file extension
+			if strings.HasSuffix(filepath, ".js") {
+				w.Header().Set("Content-Type", "application/javascript")
+			} else if strings.HasSuffix(filepath, ".css") {
+				w.Header().Set("Content-Type", "text/css")
+			} else if strings.HasSuffix(filepath, ".html") {
+				w.Header().Set("Content-Type", "text/html")
+			} else if strings.HasSuffix(filepath, ".json") {
+				w.Header().Set("Content-Type", "application/json")
+			} else if strings.HasSuffix(filepath, ".svg") {
+				w.Header().Set("Content-Type", "image/svg+xml")
+			} else if strings.HasSuffix(filepath, ".ico") {
+				w.Header().Set("Content-Type", "image/x-icon")
+			} else if strings.HasSuffix(filepath, ".png") {
+				w.Header().Set("Content-Type", "image/png")
+			}
+			
+			http.ServeFile(w, r, uiPath+filepath)
+		})
 		api.GET("/", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 			http.Redirect(w, r, "/ui/", http.StatusMovedPermanently)
+		})
+		// Also serve assets from root for Angular's base href
+		api.GET("/*.js", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+			w.Header().Set("Content-Type", "application/javascript")
+			http.ServeFile(w, r, uiPath+r.URL.Path)
+		})
+		api.GET("/*.css", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+			w.Header().Set("Content-Type", "text/css")
+			http.ServeFile(w, r, uiPath+r.URL.Path)
 		})
 	}
 
