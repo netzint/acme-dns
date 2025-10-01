@@ -1,0 +1,63 @@
+# Build stage
+FROM golang:1.21-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache gcc musl-dev git
+
+# Set working directory
+WORKDIR /build
+
+# Copy go mod files first for better caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build the binary with optimizations
+RUN CGO_ENABLED=1 GOOS=linux go build \
+    -ldflags="-w -s -X main.version=${VERSION:-dev} -X main.commit=${COMMIT:-unknown}" \
+    -a -installsuffix cgo \
+    -o acme-dns .
+
+# Runtime stage
+FROM alpine:3.19
+
+# Install runtime dependencies
+RUN apk --no-cache add ca-certificates && \
+    update-ca-certificates
+
+# Create non-root user
+RUN addgroup -g 1000 -S acmedns && \
+    adduser -u 1000 -S acmedns -G acmedns
+
+# Create necessary directories
+RUN mkdir -p /etc/acme-dns /var/lib/acme-dns && \
+    chown -R acmedns:acmedns /etc/acme-dns /var/lib/acme-dns
+
+# Copy binary from builder
+COPY --from=builder /build/acme-dns /usr/local/bin/acme-dns
+RUN chmod +x /usr/local/bin/acme-dns
+
+# Copy default config if exists
+COPY --chown=acmedns:acmedns config.cfg /etc/acme-dns/config.cfg.example
+
+# Switch to non-root user
+USER acmedns
+
+# Set working directory
+WORKDIR /var/lib/acme-dns
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost/health || exit 1
+
+# Expose ports
+EXPOSE 53/tcp 53/udp 80/tcp 443/tcp
+
+# Volumes
+VOLUME ["/etc/acme-dns", "/var/lib/acme-dns"]
+
+# Entry point
+ENTRYPOINT ["/usr/local/bin/acme-dns"]
+CMD ["-c", "/etc/acme-dns/config.cfg"]
