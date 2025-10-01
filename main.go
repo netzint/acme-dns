@@ -130,46 +130,73 @@ func startHTTPAPI(errChan chan error, config DNSConfig, dnsservers []*DNSServer)
 	api.GET("/domains", webGetDomains)
 	api.GET("/health", healthCheck)
 	
-	// Optional: Serve UI if directory exists
+	// Optional: Serve UI if directory exists  
+	// IMPORTANT: This must be registered AFTER all other routes because it's a catch-all
 	uiPath := "/usr/share/acme-dns-ui"
 	if _, err := os.Stat(uiPath); err == nil {
-		// UI files exist, serve them with proper MIME types
-		api.GET("/ui/*filepath", func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+		// This handler must be last as it catches all unmatched routes
+		api.GET("/*filepath", func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 			filepath := ps.ByName("filepath")
+			
+			// Handle root redirect
 			if filepath == "/" {
-				filepath = "/index.html"
+				http.Redirect(w, r, "/ui/", http.StatusMovedPermanently)
+				return
 			}
 			
-			// Set proper content type based on file extension
+			// For UI routes, serve index.html for client-side routing
+			if strings.HasPrefix(filepath, "/ui") {
+				actualPath := strings.TrimPrefix(filepath, "/ui")
+				if actualPath == "" || actualPath == "/" {
+					actualPath = "/index.html"
+				}
+				
+				// Check if file exists, otherwise serve index.html for Angular routing
+				fullPath := uiPath + actualPath
+				if _, err := os.Stat(fullPath); os.IsNotExist(err) && !strings.Contains(actualPath, ".") {
+					actualPath = "/index.html"
+					fullPath = uiPath + actualPath
+				}
+				
+				// Set proper content type based on file extension
+				if strings.HasSuffix(actualPath, ".js") {
+					w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+				} else if strings.HasSuffix(actualPath, ".css") {
+					w.Header().Set("Content-Type", "text/css; charset=utf-8")
+				} else if strings.HasSuffix(actualPath, ".html") {
+					w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				} else if strings.HasSuffix(actualPath, ".json") {
+					w.Header().Set("Content-Type", "application/json; charset=utf-8")
+				} else if strings.HasSuffix(actualPath, ".svg") {
+					w.Header().Set("Content-Type", "image/svg+xml")
+				} else if strings.HasSuffix(actualPath, ".ico") {
+					w.Header().Set("Content-Type", "image/x-icon")
+				} else if strings.HasSuffix(actualPath, ".png") {
+					w.Header().Set("Content-Type", "image/png")
+				} else if strings.HasSuffix(actualPath, ".woff2") {
+					w.Header().Set("Content-Type", "font/woff2")
+				} else if strings.HasSuffix(actualPath, ".woff") {
+					w.Header().Set("Content-Type", "font/woff")
+				}
+				
+				http.ServeFile(w, r, fullPath)
+				return
+			}
+			
+			// For root-level assets (JS, CSS files referenced by Angular)
 			if strings.HasSuffix(filepath, ".js") {
-				w.Header().Set("Content-Type", "application/javascript")
+				w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+				http.ServeFile(w, r, uiPath+filepath)
 			} else if strings.HasSuffix(filepath, ".css") {
-				w.Header().Set("Content-Type", "text/css")
-			} else if strings.HasSuffix(filepath, ".html") {
-				w.Header().Set("Content-Type", "text/html")
-			} else if strings.HasSuffix(filepath, ".json") {
-				w.Header().Set("Content-Type", "application/json")
-			} else if strings.HasSuffix(filepath, ".svg") {
-				w.Header().Set("Content-Type", "image/svg+xml")
+				w.Header().Set("Content-Type", "text/css; charset=utf-8")
+				http.ServeFile(w, r, uiPath+filepath)
 			} else if strings.HasSuffix(filepath, ".ico") {
 				w.Header().Set("Content-Type", "image/x-icon")
-			} else if strings.HasSuffix(filepath, ".png") {
-				w.Header().Set("Content-Type", "image/png")
+				http.ServeFile(w, r, uiPath+filepath)
+			} else {
+				// Not a UI file, pass through
+				w.WriteHeader(http.StatusNotFound)
 			}
-			
-			http.ServeFile(w, r, uiPath+filepath)
-		})
-		api.GET("/", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-			http.Redirect(w, r, "/ui/", http.StatusMovedPermanently)
-		})
-		// Also serve assets from root for Angular's base href
-		api.GET("/*.js", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-			w.Header().Set("Content-Type", "application/javascript")
-			http.ServeFile(w, r, uiPath+r.URL.Path)
-		})
-		api.GET("/*.css", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-			w.Header().Set("Content-Type", "text/css")
-			http.ServeFile(w, r, uiPath+r.URL.Path)
 		})
 	}
 
