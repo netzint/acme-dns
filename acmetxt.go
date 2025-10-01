@@ -15,6 +15,9 @@ type ACMETxt struct {
 	ACMETxtPost
 	AllowFrom cidrslice
 	Fulldomain string `json:"fulldomain"`
+	DomainName string `json:"domain_name"`
+	CreatedAt int64 `json:"created_at"`
+	UpdatedAt int64 `json:"updated_at"`
 }
 
 // ACMETxtPost holds the DNS part of the ACMETxt struct

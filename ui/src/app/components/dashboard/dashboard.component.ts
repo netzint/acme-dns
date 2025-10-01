@@ -31,7 +31,7 @@ import { RegisterDomainComponent } from '../register-domain/register-domain.comp
 })
 export class DashboardComponent implements OnInit {
   domains: AcmeDomain[] = [];
-  displayedColumns: string[] = ['fulldomain', 'subdomain', 'username', 'created_at', 'last_active', 'actions'];
+  displayedColumns: string[] = ['domain_name', 'fulldomain', 'subdomain', 'username', 'created_at', 'last_active', 'actions'];
   loading = false;
   serverStatus: 'online' | 'offline' | 'checking' = 'checking';
 

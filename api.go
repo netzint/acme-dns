@@ -23,13 +23,28 @@ func webRegisterPost(w http.ResponseWriter, r *http.Request, _ httprouter.Params
 	var regStatus int
 	var reg []byte
 	var err error
-	aTXT := ACMETxt{}
+	
+	// Parse request body for domain_name
+	type RegisterRequest struct {
+		DomainName string `json:"domain_name"`
+		AllowFrom  []string `json:"allowfrom"`
+	}
+	
+	var reqData RegisterRequest
 	bdata, _ := io.ReadAll(r.Body)
 	if len(bdata) > 0 {
-		err = json.Unmarshal(bdata, &aTXT)
+		_ = json.Unmarshal(bdata, &reqData)
+	}
+	
+	// Convert AllowFrom to cidrslice
+	var allowFrom cidrslice
+	if len(reqData.AllowFrom) > 0 {
+		allowFrom = cidrslice(reqData.AllowFrom)
+		// Validate CIDR masks
+		err = allowFrom.isValid()
 		if err != nil {
 			regStatus = http.StatusBadRequest
-			reg = jsonError("malformed_json_payload")
+			reg = jsonError("invalid_allowfrom_cidr")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(regStatus)
 			_, _ = w.Write(reg)
@@ -37,19 +52,8 @@ func webRegisterPost(w http.ResponseWriter, r *http.Request, _ httprouter.Params
 		}
 	}
 
-	// Fail with malformed CIDR mask in allowfrom
-	err = aTXT.AllowFrom.isValid()
-	if err != nil {
-		regStatus = http.StatusBadRequest
-		reg = jsonError("invalid_allowfrom_cidr")
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(regStatus)
-		_, _ = w.Write(reg)
-		return
-	}
-
-	// Create new user
-	nu, err := DB.Register(aTXT.AllowFrom)
+	// Create new user with name
+	nu, err := DB.RegisterWithName(allowFrom, reqData.DomainName)
 	if err != nil {
 		errstr := fmt.Sprintf("%v", err)
 		reg = jsonError(errstr)
@@ -118,8 +122,9 @@ type DomainResponse struct {
 	Fulldomain string   `json:"fulldomain"`
 	Subdomain  string   `json:"subdomain"`
 	Allowfrom  []string `json:"allowfrom"`
-	CreatedAt  string   `json:"created_at,omitempty"`
-	UpdatedAt  string   `json:"updated_at,omitempty"`
+	DomainName string   `json:"domain_name"`
+	CreatedAt  int64    `json:"created_at"`
+	UpdatedAt  int64    `json:"updated_at"`
 }
 
 // webGetDomains returns all registered domains from the database
@@ -149,6 +154,9 @@ func webGetDomains(w http.ResponseWriter, r *http.Request, _ httprouter.Params) 
 			Fulldomain: domain.Fulldomain,
 			Subdomain:  domain.Subdomain,
 			Allowfrom:  domain.AllowFrom.ValidEntries(),
+			DomainName: domain.DomainName,
+			CreatedAt:  domain.CreatedAt,
+			UpdatedAt:  domain.UpdatedAt,
 		}
 		response = append(response, resp)
 	}

@@ -1,9 +1,20 @@
 <h2 mat-dialog-title>Register New ACME-DNS Domain</h2>
 
 <mat-dialog-content class="dialog-content">
+  <div *ngIf="askingForName && !loading && !newDomain" class="name-input-container">
+    <p>Please enter a name to identify this domain:</p>
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Domain Name/Description</mat-label>
+      <input matInput [(ngModel)]="domainName" 
+             placeholder="e.g., example.com or My Website"
+             (keyup.enter)="submitName()">
+      <mat-hint>This helps you identify which service uses this ACME-DNS entry</mat-hint>
+    </mat-form-field>
+  </div>
+
   <div *ngIf="loading" class="loading-container">
     <mat-spinner></mat-spinner>
-    <p>Registering new domain...</p>
+    <p>Registering new domain for: {{ domainName }}...</p>
   </div>
 
   <div *ngIf="error" class="error-message">

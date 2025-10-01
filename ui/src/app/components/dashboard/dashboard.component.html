@@ -40,6 +40,13 @@
       </div>
       
       <table mat-table [dataSource]="domains" class="domains-table" *ngIf="!loading">
+        <ng-container matColumnDef="domain_name">
+          <th mat-header-cell *matHeaderCellDef>Name/Description</th>
+          <td mat-cell *matCellDef="let domain">
+            {{ domain.domain_name || '-' }}
+          </td>
+        </ng-container>
+
         <ng-container matColumnDef="fulldomain">
           <th mat-header-cell *matHeaderCellDef>Full Domain</th>
           <td mat-cell *matCellDef="let domain">

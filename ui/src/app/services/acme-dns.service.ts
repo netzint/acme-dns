@@ -69,6 +69,7 @@ export class AcmeDnsService {
             password: '', // Password is not returned from server for security
             fulldomain: item.fulldomain,
             allowfrom: item.allowfrom,
+            domain_name: item.domain_name,
             created_at: item.created_at,
             updated_at: item.updated_at
           };
@@ -114,6 +115,28 @@ export class AcmeDnsService {
       }),
       catchError(error => {
         console.error('Error registering domain:', error);
+        throw error;
+      })
+    );
+  }
+
+  registerDomainWithName(domainName: string): Observable<AcmeDomain> {
+    return this.http.post<AcmeDomain>(this.getApiUrl('/register'), { 
+      domain_name: domainName 
+    }).pipe(
+      map(response => {
+        const domain: AcmeDomain = {
+          ...response,
+          domain_name: domainName,
+          created_at: Date.now(),
+          updated_at: Date.now()
+        };
+        this.domains.set(domain.fulldomain, domain);
+        this.saveDomainsToStorage();
+        return domain;
+      }),
+      catchError(error => {
+        console.error('Error registering domain with name:', error);
         throw error;
       })
     );

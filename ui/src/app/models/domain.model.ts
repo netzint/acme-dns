@@ -4,7 +4,8 @@ export interface AcmeDomain {
   password: string;
   fulldomain: string;
   allowfrom?: string[];
-  created_at?: string;
-  updated_at?: string;
+  domain_name?: string;
+  created_at?: number | string;
+  updated_at?: number | string;
   last_active?: string;
 }

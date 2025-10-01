@@ -30,7 +30,10 @@ var userTable = `
         Username TEXT UNIQUE NOT NULL PRIMARY KEY,
         Password TEXT UNIQUE NOT NULL,
         Subdomain TEXT UNIQUE NOT NULL,
-		AllowFrom TEXT
+		AllowFrom TEXT,
+		DomainName TEXT DEFAULT '',
+		CreatedAt INT DEFAULT 0,
+		UpdatedAt INT DEFAULT 0
     );`
 
 var txtTable = `
@@ -171,6 +174,10 @@ func (d *acmedb) NewTXTValuesInTransaction(tx *sql.Tx, subdomain string) error {
 }
 
 func (d *acmedb) Register(afrom cidrslice) (ACMETxt, error) {
+	return d.RegisterWithName(afrom, "")
+}
+
+func (d *acmedb) RegisterWithName(afrom cidrslice, domainName string) (ACMETxt, error) {
 	d.Mutex.Lock()
 	defer d.Mutex.Unlock()
 	var err error
@@ -185,14 +192,20 @@ func (d *acmedb) Register(afrom cidrslice) (ACMETxt, error) {
 	}()
 	a := newACMETxt()
 	a.AllowFrom = cidrslice(afrom.ValidEntries())
+	a.DomainName = domainName
+	a.CreatedAt = time.Now().Unix()
+	a.UpdatedAt = time.Now().Unix()
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(a.Password), 10)
 	regSQL := `
     INSERT INTO records(
         Username,
         Password,
         Subdomain,
-		AllowFrom) 
-        values($1, $2, $3, $4)`
+		AllowFrom,
+		DomainName,
+		CreatedAt,
+		UpdatedAt) 
+        values($1, $2, $3, $4, $5, $6, $7)`
 	if Config.Database.Engine == "sqlite3" {
 		regSQL = getSQLiteStmt(regSQL)
 	}
@@ -202,7 +215,7 @@ func (d *acmedb) Register(afrom cidrslice) (ACMETxt, error) {
 		return a, errors.New("SQL error")
 	}
 	defer sm.Close()
-	_, err = sm.Exec(a.Username.String(), passwordHash, a.Subdomain, a.AllowFrom.JSON())
+	_, err = sm.Exec(a.Username.String(), passwordHash, a.Subdomain, a.AllowFrom.JSON(), a.DomainName, a.CreatedAt, a.UpdatedAt)
 	if err == nil {
 		err = d.NewTXTValuesInTransaction(tx, a.Subdomain)
 	}
@@ -214,7 +227,10 @@ func (d *acmedb) GetAllDomains() ([]ACMETxt, error) {
 	defer d.Mutex.Unlock()
 	var results []ACMETxt
 	getSQL := `
-	SELECT Username, Password, Subdomain, AllowFrom
+	SELECT Username, Password, Subdomain, AllowFrom, 
+	       COALESCE(DomainName, '') as DomainName,
+	       COALESCE(CreatedAt, 0) as CreatedAt,
+	       COALESCE(UpdatedAt, 0) as UpdatedAt
 	FROM records
 	`
 	rows, err := d.DB.Query(getSQL)
@@ -225,7 +241,8 @@ func (d *acmedb) GetAllDomains() ([]ACMETxt, error) {
 	for rows.Next() {
 		txt := ACMETxt{}
 		afrom := ""
-		err = rows.Scan(&txt.Username, &txt.Password, &txt.Subdomain, &afrom)
+		err = rows.Scan(&txt.Username, &txt.Password, &txt.Subdomain, &afrom, 
+			&txt.DomainName, &txt.CreatedAt, &txt.UpdatedAt)
 		if err != nil {
 			log.WithFields(log.Fields{"error": err.Error()}).Error("Database error in GetAllDomains")
 			return results, err

@@ -1,10 +1,13 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
+import { MatInputModule } from '@angular/material/input';
+import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { AcmeDnsService } from '../../services/acme-dns.service';
 import { AcmeDomain } from '../../models/domain.model';
@@ -13,11 +16,14 @@ import { AcmeDomain } from '../../models/domain.model';
   selector: 'app-register-domain',
   imports: [
     CommonModule,
+    FormsModule,
     MatDialogModule,
     MatButtonModule,
     MatProgressSpinnerModule,
     MatIconModule,
     MatListModule,
+    MatInputModule,
+    MatFormFieldModule,
     MatSnackBarModule
   ],
   templateUrl: './register-domain.component.html',
@@ -25,6 +31,8 @@ import { AcmeDomain } from '../../models/domain.model';
 })
 export class RegisterDomainComponent implements OnInit {
   loading = false;
+  askingForName = true;
+  domainName = '';
   newDomain: AcmeDomain | null = null;
   error: string | null = null;
 
@@ -35,6 +43,17 @@ export class RegisterDomainComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    // Don't auto-register, wait for name input
+  }
+
+  submitName(): void {
+    if (!this.domainName.trim()) {
+      this.snackBar.open('Please enter a domain name', 'Close', {
+        duration: 2000
+      });
+      return;
+    }
+    this.askingForName = false;
     this.registerDomain();
   }
 
@@ -42,7 +61,7 @@ export class RegisterDomainComponent implements OnInit {
     this.loading = true;
     this.error = null;
     
-    this.acmeDnsService.registerDomain().subscribe({
+    this.acmeDnsService.registerDomainWithName(this.domainName).subscribe({
       next: (domain) => {
         this.newDomain = domain;
         this.loading = false;
