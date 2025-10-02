@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,7 +18,7 @@ import (
 )
 
 // DBVersion shows the database version this code uses. This is used for update checks.
-var DBVersion = 1
+var DBVersion = 2
 
 var acmeTable = `
 	CREATE TABLE IF NOT EXISTS acmedns(
@@ -107,7 +108,14 @@ func (d *acmedb) checkDBUpgrades(versionString string) error {
 
 func (d *acmedb) handleDBUpgrades(version int) error {
 	if version == 0 {
-		return d.handleDBUpgradeTo1()
+		err := d.handleDBUpgradeTo1()
+		if err != nil {
+			return err
+		}
+		version = 1
+	}
+	if version == 1 {
+		return d.handleDBUpgradeTo2()
 	}
 	return nil
 }
@@ -162,6 +170,85 @@ func (d *acmedb) handleDBUpgradeTo1() error {
 	}
 	_, err = tx.Exec("UPDATE acmedns SET Value='1' WHERE Name='db_version'")
 	return err
+}
+
+func (d *acmedb) handleDBUpgradeTo2() error {
+	log.Info("Upgrading database to version 2: Adding DomainName, CreatedAt, UpdatedAt columns")
+	
+	tx, err := d.DB.Begin()
+	if err != nil {
+		return err
+	}
+	
+	// Rollback if errored, commit if not
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+			return
+		}
+		_ = tx.Commit()
+	}()
+	
+	// Add new columns if they don't exist
+	// For SQLite, we need to check if columns exist first
+	if Config.Database.Engine == "sqlite3" {
+		// SQLite doesn't support ALTER TABLE ADD COLUMN IF NOT EXISTS
+		// We need to check the table schema first
+		var count int
+		err = tx.QueryRow("SELECT COUNT(*) FROM pragma_table_info('records') WHERE name='DomainName'").Scan(&count)
+		if err != nil || count == 0 {
+			_, err = tx.Exec("ALTER TABLE records ADD COLUMN DomainName TEXT DEFAULT ''")
+			if err != nil && !strings.Contains(err.Error(), "duplicate column") {
+				log.WithFields(log.Fields{"error": err.Error()}).Error("Error adding DomainName column")
+				return err
+			}
+		}
+		
+		err = tx.QueryRow("SELECT COUNT(*) FROM pragma_table_info('records') WHERE name='CreatedAt'").Scan(&count)
+		if err != nil || count == 0 {
+			_, err = tx.Exec("ALTER TABLE records ADD COLUMN CreatedAt INT DEFAULT 0")
+			if err != nil && !strings.Contains(err.Error(), "duplicate column") {
+				log.WithFields(log.Fields{"error": err.Error()}).Error("Error adding CreatedAt column")
+				return err
+			}
+		}
+		
+		err = tx.QueryRow("SELECT COUNT(*) FROM pragma_table_info('records') WHERE name='UpdatedAt'").Scan(&count)
+		if err != nil || count == 0 {
+			_, err = tx.Exec("ALTER TABLE records ADD COLUMN UpdatedAt INT DEFAULT 0")
+			if err != nil && !strings.Contains(err.Error(), "duplicate column") {
+				log.WithFields(log.Fields{"error": err.Error()}).Error("Error adding UpdatedAt column")
+				return err
+			}
+		}
+	} else {
+		// PostgreSQL supports ADD COLUMN IF NOT EXISTS
+		_, err = tx.Exec("ALTER TABLE records ADD COLUMN IF NOT EXISTS DomainName TEXT DEFAULT ''")
+		if err != nil {
+			log.WithFields(log.Fields{"error": err.Error()}).Error("Error adding DomainName column")
+			return err
+		}
+		_, err = tx.Exec("ALTER TABLE records ADD COLUMN IF NOT EXISTS CreatedAt INT DEFAULT 0")
+		if err != nil {
+			log.WithFields(log.Fields{"error": err.Error()}).Error("Error adding CreatedAt column")
+			return err
+		}
+		_, err = tx.Exec("ALTER TABLE records ADD COLUMN IF NOT EXISTS UpdatedAt INT DEFAULT 0")
+		if err != nil {
+			log.WithFields(log.Fields{"error": err.Error()}).Error("Error adding UpdatedAt column")
+			return err
+		}
+	}
+	
+	// Update version
+	_, err = tx.Exec("UPDATE acmedns SET Value='2' WHERE Name='db_version'")
+	if err != nil {
+		log.WithFields(log.Fields{"error": err.Error()}).Error("Error updating database version")
+		return err
+	}
+	
+	log.Info("Database upgraded to version 2 successfully")
+	return nil
 }
 
 // Create two rows for subdomain to the txt table
