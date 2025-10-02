@@ -42,40 +42,37 @@
       <table mat-table [dataSource]="domains" class="domains-table" *ngIf="!loading">
         <ng-container matColumnDef="domain_name">
           <th mat-header-cell *matHeaderCellDef>Name/Description</th>
-          <td mat-cell *matCellDef="let domain">
-            {{ domain.domain_name || '-' }}
+          <td mat-cell *matCellDef="let domain" class="name-cell">
+            <div class="editable-field" *ngIf="editingDomain !== domain.fulldomain">
+              <span class="domain-name" (click)="startEdit(domain)">
+                {{ domain.domain_name || 'Click to add name' }}
+              </span>
+              <button mat-icon-button (click)="startEdit(domain)" matTooltip="Edit name">
+                <mat-icon>edit</mat-icon>
+              </button>
+            </div>
+            <div class="edit-field" *ngIf="editingDomain === domain.fulldomain">
+              <input #nameInput 
+                     type="text" 
+                     [(ngModel)]="domain.domain_name"
+                     (keyup.enter)="saveName(domain)"
+                     (keyup.escape)="cancelEdit()"
+                     (blur)="saveName(domain)"
+                     class="name-input">
+              <button mat-icon-button (click)="saveName(domain)" matTooltip="Save">
+                <mat-icon>check</mat-icon>
+              </button>
+              <button mat-icon-button (click)="cancelEdit()" matTooltip="Cancel">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
           </td>
         </ng-container>
 
         <ng-container matColumnDef="fulldomain">
-          <th mat-header-cell *matHeaderCellDef>Full Domain</th>
+          <th mat-header-cell *matHeaderCellDef>ACME-DNS Domain</th>
           <td mat-cell *matCellDef="let domain">
-            {{ domain.fulldomain }}
-            <button mat-icon-button (click)="copyToClipboard(domain.fulldomain)" matTooltip="Copy">
-              <mat-icon>content_copy</mat-icon>
-            </button>
-          </td>
-        </ng-container>
-
-        <ng-container matColumnDef="subdomain">
-          <th mat-header-cell *matHeaderCellDef>Subdomain</th>
-          <td mat-cell *matCellDef="let domain">{{ domain.subdomain }}</td>
-        </ng-container>
-
-        <ng-container matColumnDef="username">
-          <th mat-header-cell *matHeaderCellDef>Username</th>
-          <td mat-cell *matCellDef="let domain">
-            {{ domain.username }}
-            <button mat-icon-button (click)="copyToClipboard(domain.username)" matTooltip="Copy">
-              <mat-icon>content_copy</mat-icon>
-            </button>
-          </td>
-        </ng-container>
-
-        <ng-container matColumnDef="created_at">
-          <th mat-header-cell *matHeaderCellDef>Created</th>
-          <td mat-cell *matCellDef="let domain">
-            {{ domain.created_at ? (domain.created_at | date:'short') : '-' }}
+            <span class="monospace">{{ domain.fulldomain }}</span>
           </td>
         </ng-container>
 
@@ -89,15 +86,20 @@
         <ng-container matColumnDef="actions">
           <th mat-header-cell *matHeaderCellDef>Actions</th>
           <td mat-cell *matCellDef="let domain">
-            <button mat-icon-button (click)="checkDNS(domain)" matTooltip="Check DNS Configuration">
-              <mat-icon>dns</mat-icon>
-            </button>
-            <button mat-icon-button (click)="copyToClipboard(domain.password)" matTooltip="Copy Password">
-              <mat-icon>key</mat-icon>
-            </button>
-            <button mat-icon-button color="warn" (click)="deleteDomain(domain)" matTooltip="Delete">
-              <mat-icon>delete</mat-icon>
-            </button>
+            <div class="action-buttons">
+              <button mat-icon-button (click)="showDetails(domain)" matTooltip="View Credentials">
+                <mat-icon>visibility</mat-icon>
+              </button>
+              <button mat-icon-button (click)="checkDNS(domain)" matTooltip="Check DNS">
+                <mat-icon>dns</mat-icon>
+              </button>
+              <button mat-icon-button (click)="copyToClipboard(domain.password)" matTooltip="Copy Password">
+                <mat-icon>key</mat-icon>
+              </button>
+              <button mat-icon-button color="warn" (click)="deleteDomain(domain)" matTooltip="Delete">
+                <mat-icon>delete</mat-icon>
+              </button>
+            </div>
           </td>
         </ng-container>
 

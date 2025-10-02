@@ -1,0 +1,96 @@
+<h2 mat-dialog-title>ACME-DNS Credentials</h2>
+
+<mat-dialog-content class="dialog-content">
+  <div class="domain-header">
+    <h3>{{ domain.domain_name || 'Unnamed Domain' }}</h3>
+    <p class="subdomain-info">{{ domain.fulldomain }}</p>
+  </div>
+
+  <div class="credentials-section">
+    <mat-list>
+      <mat-list-item class="credential-item">
+        <span matListItemTitle>Full Domain</span>
+        <span matListItemLine class="value">
+          <span class="text">{{ domain.fulldomain }}</span>
+          <button mat-icon-button (click)="copyToClipboard(domain.fulldomain, 'Full domain')" matTooltip="Copy">
+            <mat-icon>content_copy</mat-icon>
+          </button>
+        </span>
+      </mat-list-item>
+
+      <mat-list-item class="credential-item">
+        <span matListItemTitle>Subdomain</span>
+        <span matListItemLine class="value">
+          <span class="text">{{ domain.subdomain }}</span>
+          <button mat-icon-button (click)="copyToClipboard(domain.subdomain, 'Subdomain')" matTooltip="Copy">
+            <mat-icon>content_copy</mat-icon>
+          </button>
+        </span>
+      </mat-list-item>
+
+      <mat-list-item class="credential-item">
+        <span matListItemTitle>Username</span>
+        <span matListItemLine class="value">
+          <span class="text">{{ domain.username }}</span>
+          <button mat-icon-button (click)="copyToClipboard(domain.username, 'Username')" matTooltip="Copy">
+            <mat-icon>content_copy</mat-icon>
+          </button>
+        </span>
+      </mat-list-item>
+
+      <mat-list-item class="credential-item">
+        <span matListItemTitle>Password</span>
+        <span matListItemLine class="value password">
+          <span class="text">{{ domain.password }}</span>
+          <button mat-icon-button (click)="copyToClipboard(domain.password, 'Password')" matTooltip="Copy">
+            <mat-icon>content_copy</mat-icon>
+          </button>
+        </span>
+      </mat-list-item>
+
+      <mat-list-item class="credential-item" *ngIf="domain.allowfrom && domain.allowfrom.length > 0">
+        <span matListItemTitle>Allowed From</span>
+        <span matListItemLine class="value">
+          <span class="text">{{ domain.allowfrom.join(', ') }}</span>
+        </span>
+      </mat-list-item>
+    </mat-list>
+  </div>
+
+  <div class="info-section">
+    <div class="info-box">
+      <mat-icon>info</mat-icon>
+      <div>
+        <p><strong>DNS Configuration Required:</strong></p>
+        <p>Create a CNAME record for <code>_acme-challenge.yourdomain.com</code> pointing to:</p>
+        <code class="dns-target">{{ domain.fulldomain }}</code>
+      </div>
+    </div>
+  </div>
+
+  <div class="copy-actions">
+    <button mat-stroked-button (click)="copyAllAsJson()">
+      <mat-icon>code</mat-icon>
+      Copy as JSON
+    </button>
+    <button mat-stroked-button (click)="copyAsCertbotCommand()">
+      <mat-icon>terminal</mat-icon>
+      Copy Certbot Command
+    </button>
+  </div>
+
+  <div class="timestamps" *ngIf="domain.created_at || domain.updated_at">
+    <div class="timestamp-item" *ngIf="domain.created_at">
+      <span class="label">Created:</span>
+      <span class="value">{{ domain.created_at | date:'medium' }}</span>
+    </div>
+    <div class="timestamp-item" *ngIf="domain.updated_at">
+      <span class="label">Updated:</span>
+      <span class="value">{{ domain.updated_at | date:'medium' }}</span>
+    </div>
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="close()">Close</button>
+</mat-dialog-actions>

@@ -210,4 +210,22 @@ export class AcmeDnsService {
       })
     );
   }
+
+  updateDomainName(fulldomain: string, newName: string): Observable<boolean> {
+    // Find the domain
+    const domain = this.domains.get(fulldomain);
+    if (domain) {
+      // Update the name
+      domain.domain_name = newName;
+      domain.updated_at = new Date().toISOString();
+      
+      // Save to localStorage
+      this.saveDomainsToStorage();
+      
+      // TODO: In a real implementation, this would also update the backend
+      // For now, we just update locally
+      return of(true);
+    }
+    return of(false);
+  }
 }
