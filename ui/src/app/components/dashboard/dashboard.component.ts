@@ -75,7 +75,7 @@ export class DashboardComponent implements OnInit {
     this.serverStatus = 'checking';
     this.acmeDnsService.getHealth().subscribe({
       next: (response) => {
-        this.serverStatus = response.status === 'error' ? 'offline' : 'online';
+        this.serverStatus = response.status === 'online' ? 'online' : 'offline';
       },
       error: () => {
         this.serverStatus = 'offline';

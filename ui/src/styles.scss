@@ -2,11 +2,47 @@
 
 @include mat.core();
 
-$acme-dns-primary: mat.m2-define-palette(mat.$m2-indigo-palette);
-$acme-dns-accent: mat.m2-define-palette(mat.$m2-pink-palette, A200, A100, A400);
+// Custom color palette for blue accent
+$acme-dns-blue: (
+  50: #e2f0fa,
+  100: #b6daf2,
+  200: #85c1ea,
+  300: #54a8e1,
+  400: #2f96da,
+  500: #0d81c4,
+  600: #0b74b8,
+  700: #0963a7,
+  800: #075397,
+  900: #033677,
+  A100: #cce6ff,
+  A200: #99cdff,
+  A400: #66b3ff,
+  A700: #4da6ff,
+  contrast: (
+    50: rgba(black, 0.87),
+    100: rgba(black, 0.87),
+    200: rgba(black, 0.87),
+    300: rgba(black, 0.87),
+    400: rgba(black, 0.87),
+    500: white,
+    600: white,
+    700: white,
+    800: white,
+    900: white,
+    A100: rgba(black, 0.87),
+    A200: rgba(black, 0.87),
+    A400: rgba(black, 0.87),
+    A700: white,
+  )
+);
+
+// Define palettes
+$acme-dns-primary: mat.m2-define-palette($acme-dns-blue, 500, 400, 700);
+$acme-dns-accent: mat.m2-define-palette($acme-dns-blue, 400, 300, 600);
 $acme-dns-warn: mat.m2-define-palette(mat.$m2-red-palette);
 
-$acme-dns-theme: mat.m2-define-light-theme((
+// Define dark theme
+$acme-dns-theme: mat.m2-define-dark-theme((
   color: (
     primary: $acme-dns-primary,
     accent: $acme-dns-accent,
@@ -18,22 +54,158 @@ $acme-dns-theme: mat.m2-define-light-theme((
 
 @include mat.all-component-themes($acme-dns-theme);
 
+// Global styles
 html, body { 
   height: 100%; 
+  margin: 0;
+  padding: 0;
 }
 
 body { 
-  margin: 0; 
   font-family: Roboto, "Helvetica Neue", sans-serif; 
-  background-color: #f5f5f5;
+  background-color: #0d0d0d;
+  color: #ffffff;
 }
 
 * {
   box-sizing: border-box;
 }
 
+// Dark theme overrides
+.mat-mdc-dialog-container {
+  --mdc-dialog-container-color: #1a1a1a;
+  --mdc-dialog-subhead-color: #ffffff;
+  --mdc-dialog-supporting-text-color: rgba(255, 255, 255, 0.87);
+}
+
+.mat-mdc-card {
+  --mdc-elevated-card-container-color: #1a1a1a;
+  background-color: #1a1a1a !important;
+}
+
+.mat-toolbar {
+  background-color: #1a1a1a !important;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.mat-mdc-table {
+  background-color: #1a1a1a !important;
+  
+  .mat-mdc-header-row {
+    background-color: #2a2a2a !important;
+  }
+  
+  .mat-mdc-row:hover {
+    background-color: rgba(13, 129, 196, 0.1) !important;
+  }
+}
+
+// Form fields
+.mat-mdc-form-field {
+  --mdc-filled-text-field-container-color: #2a2a2a;
+  --mdc-filled-text-field-label-text-color: rgba(255, 255, 255, 0.6);
+  --mdc-filled-text-field-input-text-color: #ffffff;
+  --mdc-filled-text-field-hover-label-text-color: #0d81c4;
+  --mdc-filled-text-field-focus-label-text-color: #0d81c4;
+  --mat-form-field-focus-select-arrow-color: #0d81c4;
+}
+
+// Outline appearance
+.mat-mdc-form-field-appearance-outline {
+  .mdc-notched-outline__leading,
+  .mdc-notched-outline__notch,
+  .mdc-notched-outline__trailing {
+    border-color: rgba(255, 255, 255, 0.3) !important;
+  }
+  
+  &:hover {
+    .mdc-notched-outline__leading,
+    .mdc-notched-outline__notch,
+    .mdc-notched-outline__trailing {
+      border-color: rgba(255, 255, 255, 0.5) !important;
+    }
+  }
+  
+  &.mat-focused {
+    .mdc-notched-outline__leading,
+    .mdc-notched-outline__notch,
+    .mdc-notched-outline__trailing {
+      border-color: #0d81c4 !important;
+      border-width: 2px !important;
+    }
+  }
+}
+
+// Snackbar
 .mat-mdc-snack-bar-container {
+  --mdc-snackbar-container-color: #2a2a2a;
+  --mdc-snackbar-supporting-text-color: #ffffff;
+  
   &.mat-snack-bar-center {
     margin: 0 auto;
   }
+  
+  .mat-mdc-snack-bar-action {
+    color: #0d81c4 !important;
+  }
+}
+
+// Scrollbar
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a2a2a;
+  border-radius: 4px;
+  
+  &:hover {
+    background: #0d81c4;
+  }
+}
+
+// Utility classes
+.full-width {
+  width: 100% !important;
+}
+
+.text-center {
+  text-align: center;
+}
+
+// Custom button styles
+.mat-mdc-raised-button {
+  &.mat-primary {
+    background-color: #0d81c4 !important;
+    
+    &:hover:not(:disabled) {
+      background-color: #0b74b8 !important;
+    }
+  }
+  
+  &.mat-accent {
+    background-color: #2f96da !important;
+    
+    &:hover:not(:disabled) {
+      background-color: #54a8e1 !important;
+    }
+  }
+}
+
+// Icon buttons
+.mat-mdc-icon-button {
+  &:hover:not(:disabled) {
+    background-color: rgba(13, 129, 196, 0.1);
+  }
+}
+
+// Dialog surface
+.mat-mdc-dialog-surface {
+  background-color: #1a1a1a !important;
+  color: #ffffff !important;
 }

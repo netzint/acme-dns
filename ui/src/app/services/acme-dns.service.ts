@@ -183,10 +183,17 @@ export class AcmeDnsService {
   }
 
   getHealth(): Observable<any> {
-    return this.http.get(this.getApiUrl('/health')).pipe(
+    return this.http.get(this.getApiUrl('/health'), { observe: 'response' }).pipe(
+      map(response => {
+        // If we get any successful response (200-299), server is online
+        if (response.status >= 200 && response.status < 300) {
+          return { status: 'online' };
+        }
+        return { status: 'offline' };
+      }),
       catchError(error => {
         console.error('Health check failed:', error);
-        return of({ status: 'error', message: 'Server unreachable' });
+        return of({ status: 'offline', message: 'Server unreachable' });
       })
     );
   }

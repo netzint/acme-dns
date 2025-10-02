@@ -89,8 +89,16 @@
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
-  <button mat-button mat-dialog-close *ngIf="!newDomain">Cancel</button>
+  <button mat-button mat-dialog-close *ngIf="!newDomain && !loading">Cancel</button>
+  <button mat-raised-button color="primary" 
+          (click)="submitName()" 
+          [disabled]="!domainName.trim() || loading"
+          *ngIf="askingForName && !newDomain">
+    <mat-icon>add</mat-icon>
+    Register Domain
+  </button>
   <button mat-raised-button color="primary" (click)="close()" *ngIf="newDomain">
+    <mat-icon>check</mat-icon>
     Done
   </button>
 </mat-dialog-actions>
