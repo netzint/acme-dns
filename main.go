@@ -131,73 +131,80 @@ func startHTTPAPI(errChan chan error, config DNSConfig, dnsservers []*DNSServer)
 	api.GET("/health", healthCheck)
 	
 	// Optional: Serve UI if directory exists  
-	// IMPORTANT: This must be registered AFTER all other routes because it's a catch-all
 	uiPath := "/usr/share/acme-dns-ui"
+	var handler http.Handler
 	if _, err := os.Stat(uiPath); err == nil {
-		// This handler must be last as it catches all unmatched routes
-		api.GET("/*filepath", func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+		// Serve UI using custom handler for static files
+		api.GET("/", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+			http.Redirect(w, r, "/ui/", http.StatusMovedPermanently)
+		})
+		
+		// Serve UI files under /ui path
+		api.GET("/ui/*filepath", func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 			filepath := ps.ByName("filepath")
-			
-			// Handle root redirect
-			if filepath == "/" {
-				http.Redirect(w, r, "/ui/", http.StatusMovedPermanently)
-				return
+			if filepath == "/" || filepath == "" {
+				filepath = "/index.html"
 			}
 			
-			// For UI routes, serve index.html for client-side routing
-			if strings.HasPrefix(filepath, "/ui") {
-				actualPath := strings.TrimPrefix(filepath, "/ui")
-				if actualPath == "" || actualPath == "/" {
-					actualPath = "/index.html"
+			// Check if file exists
+			fullPath := uiPath + filepath
+			if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+				// For Angular routing, serve index.html for non-asset paths
+				if !strings.Contains(filepath, ".") {
+					fullPath = uiPath + "/index.html"
 				}
-				
-				// Check if file exists, otherwise serve index.html for Angular routing
-				fullPath := uiPath + actualPath
-				if _, err := os.Stat(fullPath); os.IsNotExist(err) && !strings.Contains(actualPath, ".") {
-					actualPath = "/index.html"
-					fullPath = uiPath + actualPath
-				}
-				
-				// Set proper content type based on file extension
-				if strings.HasSuffix(actualPath, ".js") {
-					w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-				} else if strings.HasSuffix(actualPath, ".css") {
-					w.Header().Set("Content-Type", "text/css; charset=utf-8")
-				} else if strings.HasSuffix(actualPath, ".html") {
-					w.Header().Set("Content-Type", "text/html; charset=utf-8")
-				} else if strings.HasSuffix(actualPath, ".json") {
-					w.Header().Set("Content-Type", "application/json; charset=utf-8")
-				} else if strings.HasSuffix(actualPath, ".svg") {
-					w.Header().Set("Content-Type", "image/svg+xml")
-				} else if strings.HasSuffix(actualPath, ".ico") {
-					w.Header().Set("Content-Type", "image/x-icon")
-				} else if strings.HasSuffix(actualPath, ".png") {
-					w.Header().Set("Content-Type", "image/png")
-				} else if strings.HasSuffix(actualPath, ".woff2") {
-					w.Header().Set("Content-Type", "font/woff2")
-				} else if strings.HasSuffix(actualPath, ".woff") {
-					w.Header().Set("Content-Type", "font/woff")
-				}
-				
-				http.ServeFile(w, r, fullPath)
-				return
 			}
 			
-			// For root-level assets (JS, CSS files referenced by Angular)
+			// Set proper content type based on file extension
 			if strings.HasSuffix(filepath, ".js") {
 				w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-				http.ServeFile(w, r, uiPath+filepath)
 			} else if strings.HasSuffix(filepath, ".css") {
 				w.Header().Set("Content-Type", "text/css; charset=utf-8")
-				http.ServeFile(w, r, uiPath+filepath)
+			} else if strings.HasSuffix(filepath, ".html") {
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			} else if strings.HasSuffix(filepath, ".json") {
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			} else if strings.HasSuffix(filepath, ".svg") {
+				w.Header().Set("Content-Type", "image/svg+xml")
 			} else if strings.HasSuffix(filepath, ".ico") {
 				w.Header().Set("Content-Type", "image/x-icon")
-				http.ServeFile(w, r, uiPath+filepath)
-			} else {
-				// Not a UI file, pass through
-				w.WriteHeader(http.StatusNotFound)
+			} else if strings.HasSuffix(filepath, ".png") {
+				w.Header().Set("Content-Type", "image/png")
+			} else if strings.HasSuffix(filepath, ".woff2") {
+				w.Header().Set("Content-Type", "font/woff2")
+			} else if strings.HasSuffix(filepath, ".woff") {
+				w.Header().Set("Content-Type", "font/woff")
 			}
+			
+			http.ServeFile(w, r, fullPath)
 		})
+		
+		// Create a custom handler that wraps httprouter and serves static files from root
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Check if this is a request for a static asset from root
+			if strings.HasSuffix(r.URL.Path, ".js") || 
+			   strings.HasSuffix(r.URL.Path, ".css") || 
+			   strings.HasSuffix(r.URL.Path, ".ico") {
+				fullPath := uiPath + r.URL.Path
+				if _, err := os.Stat(fullPath); err == nil {
+					// Set proper content type
+					if strings.HasSuffix(r.URL.Path, ".js") {
+						w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+					} else if strings.HasSuffix(r.URL.Path, ".css") {
+						w.Header().Set("Content-Type", "text/css; charset=utf-8")
+					} else if strings.HasSuffix(r.URL.Path, ".ico") {
+						w.Header().Set("Content-Type", "image/x-icon")
+					}
+					http.ServeFile(w, r, fullPath)
+					return
+				}
+			}
+			// Otherwise pass to httprouter
+			api.ServeHTTP(w, r)
+		})
+	} else {
+		// No UI, just use the API router
+		handler = api
 	}
 
 	host := Config.API.IP + ":" + Config.API.Port
@@ -241,7 +248,7 @@ func startHTTPAPI(errChan chan error, config DNSConfig, dnsservers []*DNSServer)
 
 		srv := &http.Server{
 			Addr:      host,
-			Handler:   c.Handler(api),
+			Handler:   c.Handler(handler),
 			TLSConfig: cfg,
 			ErrorLog:  stdlog.New(logwriter, "", 0),
 		}
@@ -256,7 +263,7 @@ func startHTTPAPI(errChan chan error, config DNSConfig, dnsservers []*DNSServer)
 		cfg.GetCertificate = magic.GetCertificate
 		srv := &http.Server{
 			Addr:      host,
-			Handler:   c.Handler(api),
+			Handler:   c.Handler(handler),
 			TLSConfig: cfg,
 			ErrorLog:  stdlog.New(logwriter, "", 0),
 		}
@@ -265,7 +272,7 @@ func startHTTPAPI(errChan chan error, config DNSConfig, dnsservers []*DNSServer)
 	case "cert":
 		srv := &http.Server{
 			Addr:      host,
-			Handler:   c.Handler(api),
+			Handler:   c.Handler(handler),
 			TLSConfig: cfg,
 			ErrorLog:  stdlog.New(logwriter, "", 0),
 		}
@@ -273,7 +280,7 @@ func startHTTPAPI(errChan chan error, config DNSConfig, dnsservers []*DNSServer)
 		err = srv.ListenAndServeTLS(Config.API.TLSCertFullchain, Config.API.TLSCertPrivkey)
 	default:
 		log.WithFields(log.Fields{"host": host}).Info("Listening HTTP")
-		err = http.ListenAndServe(host, c.Handler(api))
+		err = http.ListenAndServe(host, c.Handler(handler))
 	}
 	if err != nil {
 		errChan <- err
