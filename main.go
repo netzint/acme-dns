@@ -130,6 +130,7 @@ func startHTTPAPI(errChan chan error, config DNSConfig, dnsservers []*DNSServer)
 	api.GET("/domains", webGetDomains)
 	api.GET("/health", healthCheck)
 	api.POST("/dnscheck", webDNSCheck)
+	api.POST("/updatename", webUpdateName)
 	
 	// Optional: Serve UI if directory exists  
 	uiPath := "/usr/share/acme-dns-ui"

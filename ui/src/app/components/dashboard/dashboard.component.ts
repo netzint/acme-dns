@@ -110,8 +110,15 @@ export class DashboardComponent implements OnInit {
   }
 
   deleteDomain(domain: AcmeDomain): void {
-    if (confirm(`Are you sure you want to delete ${domain.fulldomain}?`)) {
+    const message = `Are you sure you want to remove ${domain.domain_name || domain.fulldomain} from this UI?
+
+Note: This will only remove it from the local browser storage. The ACME-DNS registration on the server will remain active.`;
+    
+    if (confirm(message)) {
       this.acmeDnsService.deleteDomain(domain.fulldomain).subscribe(() => {
+        this.snackBar.open('Domain removed from local storage', 'Close', {
+          duration: 3000
+        });
         this.loadDomains();
       });
     }

@@ -309,6 +309,24 @@ func (d *acmedb) RegisterWithName(afrom cidrslice, domainName string) (ACMETxt, 
 	return a, err
 }
 
+// UpdateDomainName updates the domain name for a given subdomain
+func (d *acmedb) UpdateDomainName(subdomain string, domainName string) error {
+	d.Mutex.Lock()
+	defer d.Mutex.Unlock()
+	
+	query := `UPDATE records SET DomainName = $1, UpdatedAt = $2 WHERE Subdomain = $3`
+	if Config.Database.Engine == "sqlite3" {
+		query = getSQLiteStmt(query)
+	}
+	
+	_, err := d.DB.Exec(query, domainName, time.Now().Unix(), subdomain)
+	if err != nil {
+		return err
+	}
+	
+	return nil
+}
+
 func (d *acmedb) GetAllDomains() ([]ACMETxt, error) {
 	d.Mutex.Lock()
 	defer d.Mutex.Unlock()

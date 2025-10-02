@@ -195,6 +195,23 @@ body {
       background-color: #54a8e1 !important;
     }
   }
+  
+  // Fix icon alignment
+  .mat-icon {
+    vertical-align: middle !important;
+    margin-top: -2px;
+  }
+}
+
+// Fix icon alignment in all buttons
+.mat-mdc-button,
+.mat-mdc-raised-button,
+.mat-mdc-outlined-button,
+.mat-mdc-flat-button {
+  .mat-icon {
+    vertical-align: middle !important;
+    line-height: inherit !important;
+  }
 }
 
 // Icon buttons
