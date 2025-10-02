@@ -12,6 +12,7 @@ import { AuthService } from '../../services/auth.service';
 import { AcmeDnsService } from '../../services/acme-dns.service';
 import { AcmeDomain } from '../../models/domain.model';
 import { RegisterDomainComponent } from '../register-domain/register-domain.component';
+import { DnsCheckComponent } from '../dns-check/dns-check.component';
 
 @Component({
   selector: 'app-dashboard',
@@ -105,6 +106,13 @@ export class DashboardComponent implements OnInit {
         this.loadDomains();
       });
     }
+  }
+
+  checkDNS(domain: AcmeDomain): void {
+    const dialogRef = this.dialog.open(DnsCheckComponent, {
+      width: '600px',
+      data: { domain }
+    });
   }
 
   logout(): void {

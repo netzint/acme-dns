@@ -89,6 +89,9 @@
         <ng-container matColumnDef="actions">
           <th mat-header-cell *matHeaderCellDef>Actions</th>
           <td mat-cell *matCellDef="let domain">
+            <button mat-icon-button (click)="checkDNS(domain)" matTooltip="Check DNS Configuration">
+              <mat-icon>dns</mat-icon>
+            </button>
             <button mat-icon-button (click)="copyToClipboard(domain.password)" matTooltip="Copy Password">
               <mat-icon>key</mat-icon>
             </button>

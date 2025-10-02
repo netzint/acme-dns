@@ -1,0 +1,158 @@
+<h2 mat-dialog-title>DNS Configuration Check</h2>
+
+<mat-dialog-content class="dialog-content">
+  <!-- Domain Input Section -->
+  <div class="input-section" *ngIf="!loading && !result">
+    <p class="info-text">
+      Enter your domain to verify that the CNAME record is correctly configured for ACME DNS validation.
+    </p>
+    
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Your Domain</mat-label>
+      <input matInput 
+             [(ngModel)]="domain" 
+             placeholder="example.com"
+             (keyup.enter)="checkDNS()">
+      <mat-icon matSuffix>language</mat-icon>
+      <mat-hint>Enter the domain you want to use with Let's Encrypt</mat-hint>
+    </mat-form-field>
+
+    <div class="expected-config">
+      <h3>Expected DNS Configuration:</h3>
+      <div class="config-box">
+        <div class="config-item">
+          <span class="label">Record Type:</span>
+          <span class="value">CNAME</span>
+        </div>
+        <div class="config-item">
+          <span class="label">Name:</span>
+          <span class="value">
+            {{ getChallengeRecord() || '_acme-challenge.yourdomain.com' }}
+            <button mat-icon-button (click)="copyToClipboard(getChallengeRecord())" 
+                    *ngIf="domain" 
+                    matTooltip="Copy">
+              <mat-icon>content_copy</mat-icon>
+            </button>
+          </span>
+        </div>
+        <div class="config-item">
+          <span class="label">Target:</span>
+          <span class="value">
+            {{ data.domain.fulldomain }}
+            <button mat-icon-button (click)="copyToClipboard(data.domain.fulldomain)" 
+                    matTooltip="Copy">
+              <mat-icon>content_copy</mat-icon>
+            </button>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="error-message" *ngIf="error">
+      <mat-icon color="warn">error</mat-icon>
+      <p>{{ error }}</p>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div class="loading-container" *ngIf="loading">
+    <mat-spinner></mat-spinner>
+    <p>Checking DNS records for {{ domain }}...</p>
+  </div>
+
+  <!-- Results Section -->
+  <div class="result-section" *ngIf="result && !loading">
+    <!-- Success State -->
+    <div class="result-success" *ngIf="result.valid">
+      <div class="success-icon">
+        <mat-icon>check_circle</mat-icon>
+      </div>
+      <h3>DNS Configuration Valid!</h3>
+      <p>{{ result.message }}</p>
+      
+      <div class="result-details">
+        <mat-list>
+          <mat-list-item>
+            <span matListItemTitle>CNAME Record</span>
+            <span matListItemLine class="monospace">{{ getChallengeRecord() }}</span>
+          </mat-list-item>
+          <mat-list-item>
+            <span matListItemTitle>Points To</span>
+            <span matListItemLine class="monospace success-text">{{ result.cname_target }}</span>
+          </mat-list-item>
+        </mat-list>
+      </div>
+    </div>
+
+    <!-- Failure State -->
+    <div class="result-failure" *ngIf="!result.valid">
+      <div class="failure-icon">
+        <mat-icon>error</mat-icon>
+      </div>
+      <h3>DNS Configuration Issue</h3>
+      <p>{{ result.message }}</p>
+      
+      <div class="result-details">
+        <div class="config-issue" *ngIf="!result.has_cname">
+          <h4>No CNAME Record Found</h4>
+          <p>Please create the following DNS record:</p>
+          <div class="dns-instruction">
+            <code>{{ getChallengeRecord() }} CNAME {{ data.domain.fulldomain }}</code>
+            <button mat-icon-button 
+                    (click)="copyToClipboard(getChallengeRecord() + ' CNAME ' + data.domain.fulldomain)"
+                    matTooltip="Copy DNS record">
+              <mat-icon>content_copy</mat-icon>
+            </button>
+          </div>
+        </div>
+
+        <div class="config-issue" *ngIf="result.has_cname && !result.valid">
+          <h4>Incorrect CNAME Target</h4>
+          <mat-list>
+            <mat-list-item>
+              <span matListItemTitle>Current Target</span>
+              <span matListItemLine class="monospace error-text">{{ result.cname_target }}</span>
+            </mat-list-item>
+            <mat-list-item>
+              <span matListItemTitle>Expected Target</span>
+              <span matListItemLine class="monospace">{{ result.expected }}</span>
+            </mat-list-item>
+          </mat-list>
+        </div>
+
+        <div class="help-text">
+          <mat-icon>info</mat-icon>
+          <p>
+            DNS changes can take up to 48 hours to propagate worldwide, though they typically 
+            update within a few minutes. If you just made changes, wait a moment and try again.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Additional Records Info -->
+    <div class="additional-info" *ngIf="result.records && result.records.length > 0">
+      <h4>Additional Records Found:</h4>
+      <mat-chip-set>
+        <mat-chip *ngFor="let record of result.records">{{ record }}</mat-chip>
+      </mat-chip-set>
+    </div>
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="close()">Close</button>
+  <button mat-raised-button color="primary" 
+          (click)="checkDNS()" 
+          [disabled]="!domain.trim() || loading"
+          *ngIf="!result || !result.valid">
+    <mat-icon>dns</mat-icon>
+    {{ result ? 'Check Again' : 'Check DNS' }}
+  </button>
+  <button mat-raised-button color="primary"
+          (click)="domain = ''; result = null; error = null;"
+          *ngIf="result">
+    <mat-icon>refresh</mat-icon>
+    Check Another Domain
+  </button>
+</mat-dialog-actions>

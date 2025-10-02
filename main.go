@@ -129,6 +129,7 @@ func startHTTPAPI(errChan chan error, config DNSConfig, dnsservers []*DNSServer)
 	api.POST("/update", Auth(webUpdatePost))
 	api.GET("/domains", webGetDomains)
 	api.GET("/health", healthCheck)
+	api.POST("/dnscheck", webDNSCheck)
 	
 	// Optional: Serve UI if directory exists  
 	uiPath := "/usr/share/acme-dns-ui"
@@ -152,6 +153,7 @@ func startHTTPAPI(errChan chan error, config DNSConfig, dnsservers []*DNSServer)
 				// For Angular routing, serve index.html for non-asset paths
 				if !strings.Contains(filepath, ".") {
 					fullPath = uiPath + "/index.html"
+					filepath = "/index.html"
 				}
 			}
 			

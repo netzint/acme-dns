@@ -197,4 +197,17 @@ export class AcmeDnsService {
       })
     );
   }
+
+  checkDNS(domain: string, subdomain: string, fulldomain: string): Observable<any> {
+    return this.http.post(this.getApiUrl('/dnscheck'), {
+      domain: domain,
+      subdomain: subdomain,
+      fulldomain: fulldomain
+    }).pipe(
+      catchError(error => {
+        console.error('DNS check failed:', error);
+        throw error;
+      })
+    );
+  }
 }
