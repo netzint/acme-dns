@@ -78,4 +78,5 @@ type database interface {
 	SetBackend(*sql.DB)
 	Close()
 	GetAllDomains() ([]ACMETxt, error)
+	UpdateDomainName(string, string) error
 }
