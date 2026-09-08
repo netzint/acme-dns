@@ -20,11 +20,22 @@ certbot, acme.sh, acme-dns-client) spricht weiter mit `/register` und `/update`.
 ## Schnellstart
 
 ```bash
+mkdir -p config data
+cp config.cfg config/config.cfg      # und anpassen
+# Das Image läuft als uid 1000, beide Verzeichnisse müssen ihm gehören:
+sudo chown -R 1000:1000 config data
+sudo chmod 600 config/config.cfg
+
 docker compose -f docker-compose.combined.yml up -d
 ```
 
 Die Oberfläche liegt danach auf `/`, die API unverändert auf `/register`, `/update`
 und `/health`.
+
+Der Healthcheck steht bewusst in der Compose-Datei und nicht im Image: mit
+`tls = "letsencrypt"` antwortet der Server nur per HTTPS und legt nur ein Zertifikat
+für die eigene Domain vor. Der `extra_hosts`-Eintrag lässt diesen Namen im Container
+auf `127.0.0.1` zeigen, damit die Probe ohne `--no-check-certificate` auskommt.
 
 ## Konfiguration
 

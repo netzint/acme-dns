@@ -64,9 +64,9 @@ USER acmedns
 
 WORKDIR /var/lib/acme-dns
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost/health || exit 1
+# No HEALTHCHECK here on purpose: the scheme, port and certificate name all come
+# from config.cfg, so only the deployment knows what a healthy probe looks like.
+# docker-compose.combined.yml defines one.
 
 # Expose ports
 EXPOSE 53/tcp 53/udp 80/tcp 443/tcp
