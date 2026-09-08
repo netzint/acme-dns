@@ -183,8 +183,8 @@ go build -o acme-dns . && ./acme-dns -c config.cfg
 # Tests
 go test ./...
 
-# UI mit Hot Reload gegen ein laufendes Backend
-cd ui && npm install && npm start
+# UI mit Hot Reload gegen ein laufendes Backend auf 127.0.0.1:8080
+cd ui && npm install && npm run dev
 ```
 
 Für den lokalen Betrieb ohne Docker zeigt `api.ui_path` in der `config.cfg` auf das
@@ -192,7 +192,17 @@ Bauverzeichnis der UI:
 
 ```ini
 [api]
-ui_path = "./ui/dist/acme-dns-ui/browser"
+ui_path = "./ui/dist"
+```
+
+Die Oberfläche ist React 19 mit Vite, Tailwind CSS v4 und Komponenten aus
+[shadcn/ui](https://ui.shadcn.com) und [ReUI](https://reui.io). Die Komponenten liegen
+als Quelltext unter `ui/src/components/ui` und `ui/src/components/reui` im Repository —
+aktualisiert werden sie über die shadcn-CLI:
+
+```bash
+cd ui
+npx shadcn@latest add @reui/stepper --overwrite
 ```
 
 ## Datenbank

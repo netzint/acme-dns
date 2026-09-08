@@ -1,91 +1,51 @@
-# ACME-DNS UI
+# acme-dns Verwaltungsoberfläche
 
-Eine Angular-basierte Web-UI für die Verwaltung von ACME-DNS Domains.
-
-## Features
-
-- Login-geschützter Bereich (Credentials in `src/app/config/app.config.ts`)
-- Dashboard zur Anzeige aller registrierten Domains
-- Neue Domains registrieren
-- Domain-Informationen kopieren (Full Domain, Username, Password)
-- Domains löschen
-- Server-Status Anzeige
-- Speicherung der Domains im LocalStorage
-
-## Installation
-
-```bash
-cd acme-dns-ui
-npm install
-```
-
-## Konfiguration
-
-Bearbeite die Datei `src/app/config/app.config.ts`:
-
-```typescript
-export const appConfig: AppConfig = {
-  auth: {
-    username: 'admin',        // Login Username
-    password: 'admin123'      // Login Passwort
-  },
-  acmeDns: {
-    apiUrl: 'http://localhost:8080',  // ACME-DNS Server URL
-    username: '',
-    password: ''
-  }
-};
-```
+React 19 + Vite + Tailwind CSS v4. Die Komponenten kommen aus
+[shadcn/ui](https://ui.shadcn.com) und [ReUI](https://reui.io) und liegen als Quelltext im
+Repository, nicht als npm-Abhängigkeit.
 
 ## Entwicklung
 
 ```bash
-npm start
+npm install
+npm run dev
 ```
 
-Die Anwendung läuft dann auf http://localhost:4200/
-
-## CORS-Konfiguration für ACME-DNS
-
-Damit die UI mit dem ACME-DNS Server kommunizieren kann, muss CORS im ACME-DNS Server aktiviert werden. 
-
-Füge folgende Einstellungen in die `config.cfg` des ACME-DNS Servers ein:
-
-```ini
-[api]
-# CORS Headers
-cors_origins = ["http://localhost:4200"]
-```
-
-## Build für Produktion
+Der Dev-Server proxyt `/api`, `/health`, `/register` und `/update` auf
+`http://127.0.0.1:8080`. Ein lokal laufendes acme-dns auf einem anderen Port erreichst du
+über `ACMEDNS_BACKEND=http://127.0.0.1:8087 npm run dev`.
 
 ```bash
-npm run build
+npm run build   # tsc -b && vite build, Ergebnis in dist/
+npm run lint    # oxlint
 ```
 
-Die gebaute Anwendung befindet sich dann im `dist/` Verzeichnis.
+Im Produktionsbetrieb liefert das Go-Binary den Inhalt von `dist/` selbst aus, die API
+liegt also auf derselben Origin. Für den Betrieb ohne Docker zeigt `api.ui_path` in der
+`config.cfg` auf dieses Verzeichnis.
 
-## Verwendung
+## Komponenten aktualisieren oder ergänzen
 
-1. Starte den ACME-DNS Server
-2. Starte die Angular-Anwendung
-3. Logge dich mit den konfigurierten Credentials ein
-4. Registriere neue Domains über den "Register New Domain" Button
-5. Die Domain-Credentials werden automatisch im LocalStorage gespeichert
+Die ReUI-Registry ist in `components.json` als Namensraum `@reui` hinterlegt:
 
-## Docker Deployment (optional)
-
-Du kannst die UI auch als Docker Container deployen:
-
-```dockerfile
-FROM node:20-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
-
-FROM nginx:alpine
-COPY --from=builder /app/dist/acme-dns-ui/browser /usr/share/nginx/html
-EXPOSE 80
+```bash
+npx shadcn@latest add @reui/stepper --overwrite   # vorhandene aktualisieren
+npx shadcn@latest add @reui/timeline              # neue hinzufügen
+npx shadcn@latest add card dialog                 # aus der shadcn-Basis
 ```
+
+Alles unter `src/components/ui` und `src/components/reui` ist so erzeugter Fremdcode.
+Diese beiden Verzeichnisse sind vom Linter ausgenommen und die `noUnused*`-Prüfungen von
+TypeScript sind projektweit aus, damit ein erneutes Ausführen der CLI nicht jedes Mal
+Nacharbeit erzeugt. Eigene Bausteine gehören nach `src/components` (eine Ebene darüber),
+`src/features` oder `src/pages`.
+
+## Aufbau
+
+| Pfad | Inhalt |
+| --- | --- |
+| `src/lib/api.ts` | typisierter Client für `/api/admin/*`, Sitzungsverwaltung |
+| `src/lib/snippets.ts` | erzeugt die Copy-und-Paste-Blöcke für Traefik, lego, certbot, curl |
+| `src/lib/types.ts` | die Datenstrukturen der API |
+| `src/pages/` | Login und Domainübersicht |
+| `src/features/` | die Dialoge: anlegen, Details, DNS-Prüfung, Bestätigung |

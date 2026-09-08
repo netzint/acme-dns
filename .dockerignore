@@ -4,7 +4,7 @@
 .nimbalyst
 ui/node_modules
 ui/dist
-ui/.angular
+ui/.vite
 acme-dns
 *.db
 data

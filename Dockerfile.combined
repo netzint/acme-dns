@@ -16,8 +16,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-w -s" \
     -o acme-dns .
 
-# Build stage for Angular frontend
-FROM node:20-alpine AS ui-builder
+# Build stage for the React frontend
+FROM node:22-alpine AS ui-builder
 
 WORKDIR /app
 
@@ -28,7 +28,7 @@ RUN npm ci
 # Copy UI source code
 COPY ui/ .
 
-# Build the Angular app without base-href (API is on same host)
+# Type check and bundle the React app
 RUN npm run build
 
 # Final stage - Runtime
@@ -51,7 +51,7 @@ COPY --from=go-builder /build/acme-dns /usr/local/bin/acme-dns
 RUN chmod +x /usr/local/bin/acme-dns
 
 # Copy frontend files
-COPY --from=ui-builder /app/dist/acme-dns-ui/browser /usr/share/acme-dns-ui
+COPY --from=ui-builder /app/dist /usr/share/acme-dns-ui
 RUN chown -R acmedns:acmedns /usr/share/acme-dns-ui
 
 # Copy config
