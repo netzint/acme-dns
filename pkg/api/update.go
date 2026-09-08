@@ -42,6 +42,14 @@ func (a *AcmednsAPI) webUpdatePost(w http.ResponseWriter, r *http.Request, _ htt
 			updStatus = http.StatusInternalServerError
 			upd = jsonError("db_error")
 		} else {
+			// Record where the client wrote from. This is the only trace tying a
+			// registration to whoever operates it; a failure here must not fail
+			// the update itself.
+			if serr := a.DB.SetLastSource(atxt.Subdomain, a.requestIP(r)); serr != nil {
+				a.Logger.Errorw("Could not record the update source",
+					"error", serr.Error(),
+					"subdomain", atxt.Subdomain)
+			}
 			a.Logger.Debugw("TXT record updated",
 				"subdomain", atxt.Subdomain,
 				"txt", atxt.Value)

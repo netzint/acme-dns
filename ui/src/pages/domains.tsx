@@ -16,6 +16,7 @@ import {
   Server,
   Settings2,
   Trash2,
+  Waypoints,
   TriangleAlert,
 } from 'lucide-react'
 import {
@@ -42,6 +43,7 @@ import { CreateDomainDialog } from '@/features/create-domain-dialog'
 import { DnsCheckDialog } from '@/features/dns-check-dialog'
 import { DomainDetailsDialog } from '@/features/domain-details-dialog'
 import { ConfirmDialog } from '@/features/confirm-dialog'
+import { MatchDomainsDialog } from '@/features/match-domains-dialog'
 import { api, session } from '@/lib/api'
 import { dataGridDe } from '@/lib/data-grid-de'
 import type { AcmeDomain, ServerInfo } from '@/lib/types'
@@ -67,6 +69,7 @@ export default function DomainsPage() {
   const [details, setDetails] = useState<{ domain: AcmeDomain; isNew: boolean } | null>(null)
   const [checking, setChecking] = useState<AcmeDomain | null>(null)
   const [pendingDelete, setPendingDelete] = useState<AcmeDomain | null>(null)
+  const [matchOpen, setMatchOpen] = useState(false)
 
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 })
   const [sorting, setSorting] = useState<SortingState>([{ id: 'created_at', desc: true }])
@@ -179,14 +182,28 @@ export default function DomainsPage() {
         ),
       },
       {
-        accessorKey: 'created_at',
-        header: 'Angelegt',
-        size: 110,
-        cell: ({ row }) => (
-          <span className="text-muted-foreground text-xs">
-            {row.original.created_at ? formatDate(row.original.created_at) : '—'}
-          </span>
-        ),
+        accessorKey: 'last_ip',
+        header: 'Herkunft',
+        size: 200,
+        cell: ({ row }) => {
+          const { last_ip: ip, last_ip_host: host } = row.original
+          if (!ip) {
+            return (
+              <span
+                className="text-muted-foreground text-xs"
+                title="Wird beim nächsten /update des Clients aufgezeichnet"
+              >
+                noch unbekannt
+              </span>
+            )
+          }
+          return (
+            <div className="min-w-0">
+              {host && <div className="truncate text-xs font-medium">{host}</div>}
+              <div className="text-muted-foreground truncate font-mono text-[11px]">{ip}</div>
+            </div>
+          )
+        },
       },
       {
         id: 'actions',
@@ -306,6 +323,14 @@ export default function DomainsPage() {
             <Button size="icon" variant="outline" title="Neu laden" onClick={refresh}>
               <RefreshCw className="size-4" />
             </Button>
+            <Button
+              variant="outline"
+              title="Unbenannte Registrierungen über ihren CNAME zuordnen"
+              onClick={() => setMatchOpen(true)}
+            >
+              <Waypoints className="size-4" />
+              Zuordnen
+            </Button>
             <Button onClick={() => setCreateOpen(true)}>
               <Plus className="size-4" />
               Neue Domain
@@ -355,6 +380,8 @@ export default function DomainsPage() {
           </DataGrid>
         )}
       </main>
+
+      <MatchDomainsDialog open={matchOpen} onOpenChange={setMatchOpen} onApplied={refresh} />
 
       <CreateDomainDialog
         open={createOpen}

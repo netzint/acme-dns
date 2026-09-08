@@ -34,7 +34,7 @@ type acmednsdb struct {
 }
 
 // DBVersion shows the database version this code uses. This is used for update checks.
-var DBVersion = 3
+var DBVersion = 4
 
 // dbDefaultTimeout bounds every database operation. Without it, a single stalled
 // query (e.g. a Postgres connection silently dropped by a stateful firewall, or a
@@ -64,7 +64,8 @@ var userTable = `
 		DomainName TEXT DEFAULT '',
 		CreatedAt INT DEFAULT 0,
 		UpdatedAt INT DEFAULT 0,
-		EncPassword TEXT DEFAULT ''
+		EncPassword TEXT DEFAULT '',
+		LastIP TEXT DEFAULT ''
     );`
 
 var txtTable = `
@@ -192,8 +193,31 @@ func (d *acmednsdb) handleDBUpgrades(version int) error {
 		version = 2
 	}
 	if version == 2 {
-		return d.handleDBUpgradeTo3()
+		if err := d.handleDBUpgradeTo3(); err != nil {
+			return err
+		}
+		version = 3
 	}
+	if version == 3 {
+		return d.handleDBUpgradeTo4()
+	}
+	return nil
+}
+
+// handleDBUpgradeTo4 adds the column recording where the last /update came from.
+// Existing rows stay empty until their client renews the next certificate.
+func (d *acmednsdb) handleDBUpgradeTo4() error {
+	d.Logger.Info("Upgrading database to version 4: Adding LastIP column")
+	columns := []struct {
+		name string
+		ddl  string
+	}{
+		{"LastIP", "ALTER TABLE records ADD COLUMN LastIP TEXT DEFAULT ''"},
+	}
+	if err := d.addColumns(columns, "4"); err != nil {
+		return err
+	}
+	d.Logger.Info("Database upgraded to version 4 successfully")
 	return nil
 }
 
@@ -569,7 +593,8 @@ const selectDomainSQL = `
 	       COALESCE(r.CreatedAt, 0),
 	       COALESCE(r.UpdatedAt, 0),
 	       COALESCE(r.EncPassword, ''),
-	       COALESCE((SELECT MAX(t.LastUpdate) FROM txt t WHERE t.Subdomain = r.Subdomain), 0)
+	       COALESCE((SELECT MAX(t.LastUpdate) FROM txt t WHERE t.Subdomain = r.Subdomain), 0),
+	       COALESCE(r.LastIP, '')
 	FROM records r
 	`
 
@@ -581,7 +606,7 @@ func (d *acmednsdb) scanDomain(scan func(...interface{}) error) (acmedns.ACMETxt
 	afrom := ""
 	encPassword := ""
 	err := scan(&txt.Username, &txt.Subdomain, &afrom,
-		&txt.DomainName, &txt.CreatedAt, &txt.UpdatedAt, &encPassword, &txt.LastActive)
+		&txt.DomainName, &txt.CreatedAt, &txt.UpdatedAt, &encPassword, &txt.LastActive, &txt.LastIP)
 	if err != nil {
 		return acmedns.ACMETxt{}, err
 	}
@@ -730,4 +755,25 @@ func (d *acmednsdb) RotatePassword(subdomain string) (string, error) {
 		return "", acmedns.ErrNoSuchDomain
 	}
 	return password, nil
+}
+
+// SetLastSource records the address a successful /update came from. It is a
+// separate call rather than a parameter on Update so the upstream Update stays
+// byte for byte mergeable, and so the DNS check's own writes never overwrite a
+// real client's address.
+func (d *acmednsdb) SetLastSource(subdomain string, ip string) error {
+	if ip == "" {
+		return nil
+	}
+	d.Mutex.Lock()
+	defer d.Mutex.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), dbDefaultTimeout)
+	defer cancel()
+
+	updSQL := `UPDATE records SET LastIP=$1 WHERE Subdomain=$2`
+	if d.Config.Database.Engine == "sqlite" {
+		updSQL = getSQLiteStmt(updSQL)
+	}
+	_, err := d.DB.ExecContext(ctx, updSQL, ip, subdomain)
+	return err
 }

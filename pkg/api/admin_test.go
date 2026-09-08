@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -469,4 +470,141 @@ func TestResponseDeadlineCanOutliveWriteTimeout(t *testing.T) {
 	if string(body) != "done" {
 		t.Fatalf("got %q, want the full response written after the original deadline", body)
 	}
+}
+
+func TestSetLastSourceIsVisibleToTheUI(t *testing.T) {
+	router, _, db := setupAdminAPI(t)
+	token := loginForTest(t, router)
+
+	created, err := db.RegisterWithName(acmedns.Cidrslice{}, "source.example.com")
+	if err != nil {
+		t.Fatalf("could not create a registration: %v", err)
+	}
+
+	// Nothing recorded yet: the column exists but stays empty until a client writes.
+	fresh, err := db.GetBySubdomain(created.Subdomain)
+	if err != nil {
+		t.Fatalf("could not read the registration: %v", err)
+	}
+	if fresh.LastIP != "" {
+		t.Fatalf("a new registration must not carry a source address, got %q", fresh.LastIP)
+	}
+
+	if err := db.SetLastSource(created.Subdomain, "203.0.113.7"); err != nil {
+		t.Fatalf("could not record the source: %v", err)
+	}
+
+	stored, err := db.GetBySubdomain(created.Subdomain)
+	if err != nil {
+		t.Fatalf("could not read the registration back: %v", err)
+	}
+	if stored.LastIP != "203.0.113.7" {
+		t.Fatalf("source did not round trip, got %q", stored.LastIP)
+	}
+
+	rec := doAuthed(t, router, http.MethodGet, "/api/admin/domains", token, "")
+	var listed []AdminDomain
+	if err := json.Unmarshal(rec.Body.Bytes(), &listed); err != nil {
+		t.Fatalf("could not decode the list: %v", err)
+	}
+	for _, d := range listed {
+		if d.Subdomain == created.Subdomain {
+			if d.LastIP != "203.0.113.7" {
+				t.Fatalf("the list must expose the recorded source, got %q", d.LastIP)
+			}
+			return
+		}
+	}
+	t.Fatal("the registration is missing from the list")
+}
+
+// An empty address must not overwrite a previously recorded one, otherwise the
+// DNS check's own writes would erase the only owner hint we have.
+func TestSetLastSourceIgnoresEmptyAddress(t *testing.T) {
+	_, _, db := setupAdminAPI(t)
+
+	created, err := db.RegisterWithName(acmedns.Cidrslice{}, "keep.example.com")
+	if err != nil {
+		t.Fatalf("could not create a registration: %v", err)
+	}
+	if err := db.SetLastSource(created.Subdomain, "198.51.100.4"); err != nil {
+		t.Fatalf("could not record the source: %v", err)
+	}
+	if err := db.SetLastSource(created.Subdomain, ""); err != nil {
+		t.Fatalf("an empty source should be a no-op, got %v", err)
+	}
+
+	stored, _ := db.GetBySubdomain(created.Subdomain)
+	if stored.LastIP != "198.51.100.4" {
+		t.Fatalf("the recorded source was lost, got %q", stored.LastIP)
+	}
+}
+
+func TestPTRCacheHonoursExpiry(t *testing.T) {
+	cache := newPTRCache()
+
+	if _, ok := cache.get("192.0.2.1"); ok {
+		t.Fatal("an unseen address must be a miss")
+	}
+
+	cache.put("192.0.2.1", "host.example.com")
+	host, ok := cache.get("192.0.2.1")
+	if !ok || host != "host.example.com" {
+		t.Fatalf("expected the cached host, got %q / %v", host, ok)
+	}
+
+	// A negative result is cached too, so a failing lookup is not retried per request.
+	cache.put("192.0.2.2", "")
+	host, ok = cache.get("192.0.2.2")
+	if !ok || host != "" {
+		t.Fatalf("a negative result should be cached, got %q / %v", host, ok)
+	}
+
+	cache.mu.Lock()
+	cache.entries["192.0.2.1"] = ptrEntry{host: "host.example.com", expires: time.Now().Add(-time.Minute)}
+	cache.mu.Unlock()
+	if _, ok := cache.get("192.0.2.1"); ok {
+		t.Fatal("an expired entry must be a miss")
+	}
+}
+
+func TestMatchRejectsBadInput(t *testing.T) {
+	_, adnsapi, _ := setupAdminAPI(t)
+
+	cases := []struct {
+		name string
+		body string
+		want string
+	}{
+		{"empty list", `{"domains": []}`, "no_domains"},
+		{"only separators", `{"domains": ["  , ; \n "]}`, "no_domains"},
+		{"malformed json", `not json`, "invalid_request"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/api/admin/match", strings.NewReader(tc.body))
+			adnsapi.webAdminMatchDomains(rec, req, nil)
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("got %d, want 400", rec.Code)
+			}
+			if !strings.Contains(rec.Body.String(), tc.want) {
+				t.Fatalf("got %q, want it to mention %q", rec.Body.String(), tc.want)
+			}
+		})
+	}
+
+	t.Run("too many candidates", func(t *testing.T) {
+		domains := make([]string, maxMatchCandidates+1)
+		for i := range domains {
+			domains[i] = fmt.Sprintf("host%d.example.com", i)
+		}
+		body, _ := json.Marshal(matchRequest{Domains: domains})
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/admin/match", strings.NewReader(string(body)))
+		adnsapi.webAdminMatchDomains(rec, req, nil)
+		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "too_many_domains") {
+			t.Fatalf("got %d %q, want 400 too_many_domains", rec.Code, rec.Body.String())
+		}
+	})
 }

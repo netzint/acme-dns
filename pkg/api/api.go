@@ -23,6 +23,8 @@ type AcmednsAPI struct {
 	// sessions holds the management UI logins. It is always non-nil so the
 	// handlers do not have to guard against a missing store.
 	sessions *sessionStore
+	// ptr memoises reverse lookups of the recorded update sources.
+	ptr *ptrCache
 }
 
 func Init(config *acmedns.AcmeDnsConfig, db acmedns.AcmednsDB, logger *zap.SugaredLogger, errChan chan error) AcmednsAPI {
@@ -32,6 +34,7 @@ func Init(config *acmedns.AcmeDnsConfig, db acmedns.AcmednsDB, logger *zap.Sugar
 		Logger:   logger,
 		errChan:  errChan,
 		sessions: newSessionStore(time.Duration(config.Auth.SessionTTLHours) * time.Hour),
+		ptr:      newPTRCache(),
 	}
 	return a
 }
@@ -109,6 +112,7 @@ func (a *AcmednsAPI) Start(dnsservers []acmedns.AcmednsNS) {
 		api.POST("/api/admin/domains/:subdomain/rotate", a.hstsMiddleware(a.AdminAuth(a.webAdminRotateCredentials)))
 		api.DELETE("/api/admin/domains/:subdomain", a.hstsMiddleware(a.AdminAuth(a.webAdminDeleteDomain)))
 		api.POST("/api/admin/dnscheck", a.hstsMiddleware(a.AdminAuth(a.webDNSCheck)))
+		api.POST("/api/admin/match", a.hstsMiddleware(a.AdminAuth(a.webAdminMatchDomains)))
 	} else {
 		a.Logger.Info("Management API disabled (set auth.admin_user and auth.admin_password_hash to enable it)")
 	}

@@ -20,6 +20,8 @@ type AcmednsDB interface {
 	GetAllDomains() ([]ACMETxt, error)
 	GetTXTForDomain(string) ([]string, error)
 	Update(ACMETxtPost) error
+	// SetLastSource records where a successful /update came from
+	SetLastSource(subdomain string, ip string) error
 	UpdateDomainName(string, string) error
 	DeleteDomain(string) error
 	RotatePassword(string) (string, error)

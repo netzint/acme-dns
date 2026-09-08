@@ -336,6 +336,13 @@ export function DomainDetailsDialog({ domain, server, isNew, onClose }: DomainDe
                 Übernehmen
               </Button>
             )}
+            {record.last_ip && (
+              <p className="text-muted-foreground basis-full text-xs">
+                Letzter Zugriff des Clients von{' '}
+                <span className="font-mono">{record.last_ip}</span>
+                {record.last_ip_host && ` (${record.last_ip_host})`}
+              </p>
+            )}
             <p className="text-muted-foreground basis-full text-xs">
               Ändert die oben erzeugten Blöcke. Angelegt am{' '}
               {record.created_at

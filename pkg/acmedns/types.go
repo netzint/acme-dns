@@ -99,6 +99,10 @@ type ACMETxt struct {
 	UpdatedAt  int64  `json:"updated_at"`
 	// LastActive is the newest LastUpdate across the registration's TXT rows
 	LastActive int64 `json:"last_active"`
+	// LastIP is the address the last successful /update came from. It is the
+	// only hint at who owns a registration, because acme-dns otherwise stores
+	// nothing that ties one to a customer.
+	LastIP string `json:"last_ip"`
 }
 
 // ACMETxtPost holds the DNS part of the ACMETxt struct

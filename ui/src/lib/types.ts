@@ -14,6 +14,28 @@ export interface AcmeDomain {
   updated_at: number;
   /** Unix seconds of the last TXT update, 0 when never used. */
   last_active: number;
+  /** Address the last successful /update came from, empty until a client renews. */
+  last_ip: string;
+  /** Reverse lookup of last_ip, when one exists. */
+  last_ip_host: string;
+}
+
+/** One candidate's outcome from a domain match run. */
+export interface MatchResult {
+  domain: string;
+  status: 'matched' | 'foreign' | 'no_cname' | 'error';
+  target?: string;
+  subdomain?: string;
+  current_name?: string;
+  applied: boolean;
+  error?: string;
+}
+
+export interface MatchResponse {
+  checked: number;
+  matched: number;
+  applied: number;
+  results: MatchResult[];
 }
 
 /** Deployment specific values the UI needs to render client snippets. */

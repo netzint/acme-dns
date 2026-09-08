@@ -1,4 +1,10 @@
-import type { AcmeDomain, DnsCheckResult, LoginResponse, ServerInfo } from './types'
+import type {
+  AcmeDomain,
+  DnsCheckResult,
+  LoginResponse,
+  MatchResponse,
+  ServerInfo,
+} from './types'
 
 const TOKEN_KEY = 'acmedns.token'
 const EXPIRY_KEY = 'acmedns.token.expires'
@@ -111,6 +117,13 @@ export const api = {
 
   deleteDomain: (subdomain: string) =>
     request<{ success: boolean }>(`/api/admin/domains/${subdomain}`, { method: 'DELETE' }),
+
+  /** Resolves _acme-challenge for each candidate and reports which registration it belongs to. */
+  matchDomains: (domains: string[], apply: boolean) =>
+    request<MatchResponse>('/api/admin/match', {
+      method: 'POST',
+      body: JSON.stringify({ domains, apply }),
+    }),
 
   checkDns: (domain: string, subdomain: string, skipTxt: boolean) =>
     request<DnsCheckResult>('/api/admin/dnscheck', {

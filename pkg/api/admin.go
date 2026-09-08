@@ -40,6 +40,11 @@ type AdminDomain struct {
 	CreatedAt            int64    `json:"created_at"`
 	UpdatedAt            int64    `json:"updated_at"`
 	LastActive           int64    `json:"last_active"`
+	// LastIP is where the last successful /update came from, empty until a
+	// client renews once against this build.
+	LastIP string `json:"last_ip"`
+	// LastIPHost is the PTR of LastIP, when one exists.
+	LastIPHost string `json:"last_ip_host"`
 }
 
 func toAdminDomain(a acmedns.ACMETxt) AdminDomain {
@@ -54,6 +59,7 @@ func toAdminDomain(a acmedns.ACMETxt) AdminDomain {
 		CreatedAt:            a.CreatedAt,
 		UpdatedAt:            a.UpdatedAt,
 		LastActive:           a.LastActive,
+		LastIP:               a.LastIP,
 	}
 }
 
@@ -97,9 +103,20 @@ func (a *AcmednsAPI) webAdminListDomains(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	response := make([]AdminDomain, 0, len(domains))
+	addresses := make([]string, 0, len(domains))
 	for _, d := range domains {
 		response = append(response, toAdminDomain(d))
+		addresses = append(addresses, d.LastIP)
 	}
+
+	// The reverse lookups are the point of recording the address at all, so do
+	// them here rather than making the UI ask per row. They run concurrently and
+	// are cached, so this costs one slow round on a cold cache.
+	hosts := a.resolvePTRs(addresses)
+	for i := range response {
+		response[i].LastIPHost = hosts[response[i].LastIP]
+	}
+
 	writeJSON(w, http.StatusOK, response)
 }
 
