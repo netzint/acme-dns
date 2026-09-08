@@ -25,6 +25,7 @@ import {
   dataGridFeatures,
   type DataGridFeatures,
 } from '@/components/reui/data-grid/data-grid'
+import { DataGridColumnHeader } from '@/components/reui/data-grid/data-grid-column-header'
 import { DataGridPagination } from '@/components/reui/data-grid/data-grid-pagination'
 import { DataGridScrollArea } from '@/components/reui/data-grid/data-grid-scroll-area'
 import { DataGridTable } from '@/components/reui/data-grid/data-grid-table'
@@ -72,7 +73,7 @@ export default function DomainsPage() {
   const [matchOpen, setMatchOpen] = useState(false)
 
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 })
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'created_at', desc: true }])
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'last_active', desc: true }])
 
   // No synchronous state update here: the effect below calls this on mount, and
   // the spinner is already the initial state. Callers that refetch on a user
@@ -141,7 +142,7 @@ export default function DomainsPage() {
     () => [
       {
         accessorKey: 'domain_name',
-        header: 'Domain',
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Domain" />,
         size: 300,
         cell: ({ row }) => (
           <button
@@ -160,7 +161,7 @@ export default function DomainsPage() {
       },
       {
         accessorKey: 'last_active',
-        header: 'Status',
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Status" />,
         size: 190,
         cell: ({ row }) => (
           <div className="flex flex-wrap items-center gap-1.5">
@@ -183,7 +184,7 @@ export default function DomainsPage() {
       },
       {
         accessorKey: 'last_ip',
-        header: 'Herkunft',
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Herkunft" />,
         size: 200,
         cell: ({ row }) => {
           const { last_ip: ip, last_ip_host: host } = row.original
@@ -254,7 +255,6 @@ export default function DomainsPage() {
     features: dataGridFeatures,
     columns,
     data: visible,
-    pageCount: Math.ceil(visible.length / pagination.pageSize),
     getRowId: (row: AcmeDomain) => row.subdomain,
     state: { pagination, sorting },
     onPaginationChange: setPagination,
