@@ -13,11 +13,12 @@ type ACMETxt struct {
 	Username uuid.UUID
 	Password string
 	ACMETxtPost
-	AllowFrom cidrslice
+	AllowFrom  cidrslice
 	Fulldomain string `json:"fulldomain"`
 	DomainName string `json:"domain_name"`
-	CreatedAt int64 `json:"created_at"`
-	UpdatedAt int64 `json:"updated_at"`
+	CreatedAt  int64  `json:"created_at"`
+	UpdatedAt  int64  `json:"updated_at"`
+	LastActive int64  `json:"last_active"`
 }
 
 // ACMETxtPost holds the DNS part of the ACMETxt struct

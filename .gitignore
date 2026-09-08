@@ -5,3 +5,7 @@ acme-dns.log
 coverage.out
 .idea/
 dist/
+
+# Agent and editor state
+.omc/
+.nimbalyst/

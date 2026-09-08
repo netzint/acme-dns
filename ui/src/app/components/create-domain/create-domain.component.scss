@@ -1,0 +1,42 @@
+:host {
+  display: block;
+  min-width: 420px;
+}
+
+.intro {
+  margin: 0 0 18px;
+  font-size: 13px;
+  max-width: 44ch;
+}
+
+code {
+  background: var(--bg-inset);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--danger-dim);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  color: var(--danger);
+  font-size: 13px;
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    flex: none;
+  }
+}
+
+@media (max-width: 520px) {
+  :host {
+    min-width: 0;
+  }
+}

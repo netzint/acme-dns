@@ -1,0 +1,11 @@
+.git
+.github
+.omc
+.nimbalyst
+ui/node_modules
+ui/dist
+ui/.angular
+acme-dns
+*.db
+data
+config

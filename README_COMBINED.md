@@ -1,169 +1,184 @@
-# ACME-DNS with Integrated UI
+# acme-dns mit Verwaltungsoberfläche
 
-Single container solution with acme-dns server and web UI combined.
+Fork von [joohoi/acme-dns](https://github.com/joohoi/acme-dns) mit einer Weboberfläche,
+die den kompletten Weg von „ich brauche ein Zertifikat" bis „die DNS-Einträge stimmen"
+abbildet.
 
-## Architecture
+Der DNS- und der ACME-Teil sind unverändert: jeder acme-dns-Client (Traefik/lego,
+certbot, acme.sh, acme-dns-client) spricht weiter mit `/register` und `/update`.
 
-```
-┌──────────────────┐
-│  acme-dns server │
-│                  │
-│  API Endpoints:  │
-│  /register       │
-│  /update         │
-│  /health         │
-│  /domains        │
-│                  │
-│  Static Files:   │
-│  /ui/*           │
-│  / → /ui/        │
-└──────────────────┘
-```
+## Was die Oberfläche macht
 
-The acme-dns server handles:
-- All API endpoints directly
-- Serves UI static files from `/ui/*`
-- Redirects `/` to `/ui/`
-- Returns 404 for unknown paths
+1. **Domain anlegen** — erzeugt eine Subdomain samt Zugangsdaten.
+2. **Daten ausgeben** — den CNAME für die Zone und fertige Konfigurationsblöcke für
+   Traefik, lego, certbot und `curl`.
+3. **Prüfen** — fragt den CNAME über öffentliche Resolver ab und testet danach, ob ein
+   frisch geschriebener TXT-Wert wirklich unter `_acme-challenge.<domain>` auflösbar ist.
+   Das ist derselbe Weg, den eine Zertifizierungsstelle geht, also fällt auch eine kaputte
+   Delegierung auf.
 
-## Quick Start
-
-### Using Pre-built Image
+## Schnellstart
 
 ```bash
-docker run -d \
-  --name acme-dns \
-  -p 53:53/tcp -p 53:53/udp \
-  -p 80:80 \
-  -v $(pwd)/config:/etc/acme-dns:ro \
-  -v $(pwd)/data:/var/lib/acme-dns \
-  ghcr.io/netzint/acme-dns:combined
+docker compose -f docker-compose.combined.yml up -d
 ```
 
-Access:
-- **UI**: http://localhost/ui/
-- **API**: http://localhost/register, etc.
-- **DNS**: Port 53
+Die Oberfläche liegt danach auf `/`, die API unverändert auf `/register`, `/update`
+und `/health`.
 
-### Using Docker Compose
+## Konfiguration
+
+Die Verwaltung ist **standardmäßig aus**. Ohne `auth.admin_user` und
+`auth.admin_password_hash` läuft acme-dns wie das Original — es gibt dann weder
+`/api/admin/*` noch eine Oberfläche.
+
+### Admin-Zugang einrichten
 
 ```bash
-curl -O https://raw.githubusercontent.com/netzint/acme-dns/main/docker-compose.combined.yml
-docker-compose -f docker-compose.combined.yml up -d
+# bcrypt-Hash erzeugen (liest das Passwort von stdin)
+docker run --rm -i ghcr.io/netzint/acme-dns:combined -hashpw
 ```
-
-## Building
-
-### Build Combined Docker Image
-
-```bash
-docker build -f Dockerfile.combined -t acme-dns:combined .
-```
-
-### Build Locally
-
-```bash
-# Build backend
-go build -o acme-dns .
-
-# Build frontend
-cd ui
-npm install
-npm run build
-cd ..
-
-# Copy UI files for serving
-sudo mkdir -p /usr/share/acme-dns-ui
-sudo cp -r ui/dist/acme-dns-ui/browser/* /usr/share/acme-dns-ui/
-
-# Run
-./acme-dns -c config.cfg
-```
-
-## How It Works
-
-1. **Single Binary**: The acme-dns server includes code to serve static files
-2. **UI Path Detection**: If `/usr/share/acme-dns-ui` exists, UI routes are enabled
-3. **API First**: All API endpoints are registered first and have priority
-4. **UI Fallback**: `/ui/*` paths serve static files, with Angular routing support
-5. **No Proxy Needed**: UI JavaScript calls API endpoints directly on same origin
-
-## Configuration
-
-### UI Credentials
-
-Edit `ui/src/app/config/app.config.ts` before building:
-
-```typescript
-export const appConfig = {
-  auth: {
-    username: 'admin',
-    password: 'secure-password'
-  }
-};
-```
-
-### API Configuration
-
-Standard acme-dns configuration in `config.cfg`:
 
 ```ini
-[general]
-listen = "0.0.0.0:53"
-domain = "auth.example.com"
+[auth]
+admin_user = "admin"
+admin_password_hash = "$2a$12$..."
+session_ttl_hours = 12
+credentials_key = "ein langes zufälliges Geheimnis"
+```
 
-[database]
-engine = "sqlite3"
-connection = "/var/lib/acme-dns/acme-dns.db"
+`credentials_key` schaltet die **wiederherstellbare Passwortspeicherung** ein: jedes
+erzeugte API-Passwort wird zusätzlich AES-256-GCM-verschlüsselt abgelegt, damit die
+Oberfläche es später noch einmal anzeigen kann.
 
+> **Sicherheitshinweis:** Wer Konfigurationsdatei *und* Datenbank hat, kann damit alle
+> API-Passwörter lesen. Die Konfigurationsdatei gehört mit `chmod 0600` auf den Host und
+> nicht ins Image. Ohne `credentials_key` speichert acme-dns nur bcrypt-Hashes; verlorene
+> Passwörter lassen sich dann ausschließlich über „Neue Zugangsdaten" ersetzen.
+
+Passt auch ohne den Schlüssel: der Knopf „Neue Zugangsdaten" erzeugt jederzeit ein neues
+Passwort für dieselbe Subdomain — der einmal eingetragene CNAME bleibt gültig.
+
+### DNS-Prüfung
+
+```ini
+[dnscheck]
+resolvers = ["1.1.1.1:53", "8.8.8.8:53", "9.9.9.9:53"]
+txt_timeout_seconds = 30
+```
+
+Der vollständige Test schreibt kurzzeitig einen Zufallswert in die Registrierung. Läuft
+zeitgleich eine echte Zertifikatsausstellung für dieselbe Registrierung, kann das den
+gerade gesetzten Challenge-Wert überschreiben — acme-dns hält zwei TXT-Slots vor, der
+zweite bleibt erhalten. Wer das ausschließen will, nutzt in der Oberfläche den Schalter
+„Nur CNAME prüfen".
+
+### Eigenes Zertifikat per Let's Encrypt
+
+acme-dns kann das Zertifikat für seine eigene API selbst holen; die DNS-01-Challenge
+beantwortet es über den eingebauten Challenge-Provider, weil es für seine eigene Zone
+autoritativ ist.
+
+```ini
 [api]
-ip = "0.0.0.0"
-port = "80"
+port = "443"
+tls = "letsencrypt"
+notification_email = "admin@example.org"
+acme_cache_dir = "/var/lib/acme-dns/api-certs"
 ```
 
-## API Endpoints
+`acme_cache_dir` muss auf einem persistenten Volume liegen, sonst wird bei jedem
+Neustart ein neues Zertifikat beantragt und das Rate-Limit von Let's Encrypt greift.
 
-- `POST /register` - Register new domain
-- `POST /update` - Update TXT record (requires auth)
-- `GET /health` - Health check
-- `GET /domains` - List all domains (requires X-Api-Key header)
-- `GET /ui/*` - UI static files (if UI is included)
-- `GET /` - Redirects to /ui/
+## API
 
-## Advantages
+### Unverändert gegenüber dem Original
 
-✅ **Single Container** - Everything in one image
-✅ **No CORS Issues** - Same origin for UI and API
-✅ **No Proxy Config** - Direct API access
-✅ **Optional UI** - Works without UI files
-✅ **Simple Deployment** - One service to manage
+| Methode | Pfad | Auth |
+| --- | --- | --- |
+| `POST` | `/register` | keine (per `disable_registration` abschaltbar) |
+| `POST` | `/update` | `X-Api-User` / `X-Api-Key` |
+| `GET` | `/health` | keine |
 
-## Development
+### Verwaltung
 
-### Run Backend Only
+Alle Endpunkte unter `/api/admin/` außer `/login` erwarten
+`Authorization: Bearer <token>`.
+
+| Methode | Pfad | Zweck |
+| --- | --- | --- |
+| `POST` | `/api/admin/login` | Zugangsdaten gegen Sitzungstoken tauschen |
+| `POST` | `/api/admin/logout` | Token verwerfen |
+| `GET` | `/api/admin/session` | Token prüfen |
+| `GET` | `/api/admin/server` | Domain und Basis-URL für die Vorlagen |
+| `GET` | `/api/admin/domains` | alle Registrierungen inkl. Zugangsdaten |
+| `POST` | `/api/admin/domains` | Registrierung anlegen |
+| `POST` | `/api/admin/domains/:subdomain/name` | Domain-Bezeichnung ändern |
+| `POST` | `/api/admin/domains/:subdomain/rotate` | neues Passwort erzeugen |
+| `DELETE` | `/api/admin/domains/:subdomain` | Registrierung löschen |
+| `POST` | `/api/admin/dnscheck` | CNAME und TXT-Weg prüfen |
+
+Sitzungen liegen nur im Arbeitsspeicher: ein Neustart meldet alle Admins ab.
+Nach fünf Fehlversuchen ist eine Quell-IP 15 Minuten gesperrt.
+
+## Client-Konfiguration
+
+Die Oberfläche erzeugt diese Blöcke fertig ausgefüllt. Zum Nachschlagen:
+
+### Traefik / lego
+
+```yaml
+environment:
+  - ACME_DNS_API_BASE=https://acme-dns.example.org
+  - ACME_DNS_STORAGE_PATH=/letsencrypt/acme-dns.json
+command:
+  - --certificatesresolvers.acmedns.acme.dnschallenge=true
+  - --certificatesresolvers.acmedns.acme.dnschallenge.provider=acme-dns
+```
+
+`acme-dns.json` bildet Zertifikatsdomain auf Registrierung ab:
+
+```json
+{
+  "example.org": {
+    "fulldomain": "<uuid>.acme-dns.example.org",
+    "subdomain": "<uuid>",
+    "username": "<uuid>",
+    "password": "…",
+    "server_url": "https://acme-dns.example.org"
+  }
+}
+```
+
+### certbot
+
+`acme-dns-auth.py` liest dieselben Felder aus `/etc/letsencrypt/acmedns.json`,
+dort heißt der Schlüssel `allowfrom` statt `server_url`.
+
+## Entwicklung
+
 ```bash
-go run .
+# Backend
+go build -o acme-dns . && ./acme-dns -c config.cfg
+
+# Tests
+go test ./...
+
+# UI mit Hot Reload gegen ein laufendes Backend
+cd ui && npm install && npm start
 ```
 
-### Run UI Development Server
-```bash
-cd ui
-npm start
-# Proxy to backend: edit proxy.conf.json
+Für den lokalen Betrieb ohne Docker zeigt `api.ui_path` in der `config.cfg` auf das
+Bauverzeichnis der UI:
+
+```ini
+[api]
+ui_path = "./ui/dist/acme-dns-ui/browser"
 ```
 
-### Build Everything
-```bash
-make -f Makefile.all build-all
-```
+## Datenbank
 
-## Security Notes
-
-- UI login credentials are compiled into the frontend
-- API endpoints require proper authentication headers
-- Consider using HTTPS in production
-- Change default passwords before deployment
-
-## License
-
-MIT
+Die Tabelle `records` wird beim Start automatisch auf Version 3 migriert (neue Spalten
+`DomainName`, `CreatedAt`, `UpdatedAt`, `EncPassword`). Bestehende Registrierungen
+bleiben erhalten, haben aber kein wiederherstellbares Passwort — die Oberfläche
+kennzeichnet sie und bietet die Rotation an.

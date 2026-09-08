@@ -23,19 +23,27 @@ func webRegisterPost(w http.ResponseWriter, r *http.Request, _ httprouter.Params
 	var regStatus int
 	var reg []byte
 	var err error
-	
+
 	// Parse request body for domain_name
 	type RegisterRequest struct {
-		DomainName string `json:"domain_name"`
+		DomainName string   `json:"domain_name"`
 		AllowFrom  []string `json:"allowfrom"`
 	}
-	
+
 	var reqData RegisterRequest
 	bdata, _ := io.ReadAll(r.Body)
 	if len(bdata) > 0 {
-		_ = json.Unmarshal(bdata, &reqData)
+		// A body that is present but unparseable is an error rather than
+		// something to silently register with default values.
+		if err = json.Unmarshal(bdata, &reqData); err != nil {
+			log.WithFields(log.Fields{"error": err.Error()}).Debug("Malformed JSON payload in registration")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write(jsonError("malformed_json_payload"))
+			return
+		}
 	}
-	
+
 	// Convert AllowFrom to cidrslice
 	var allowFrom cidrslice
 	if len(reqData.AllowFrom) > 0 {
@@ -114,63 +122,4 @@ func webUpdatePost(w http.ResponseWriter, r *http.Request, _ httprouter.Params) 
 // Endpoint used to check the readiness and/or liveness (health) of the server.
 func healthCheck(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	w.WriteHeader(http.StatusOK)
-}
-
-// DomainResponse is a struct for domain list response JSON
-type DomainResponse struct {
-	Username   string   `json:"username"`
-	Fulldomain string   `json:"fulldomain"`
-	Subdomain  string   `json:"subdomain"`
-	Allowfrom  []string `json:"allowfrom"`
-	DomainName string   `json:"domain_name"`
-	CreatedAt  int64    `json:"created_at"`
-	UpdatedAt  int64    `json:"updated_at"`
-}
-
-// webGetDomains returns all registered domains from the database
-func webGetDomains(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	// Simple auth check - you might want to add proper authentication here
-	apiKey := r.Header.Get("X-Api-Key")
-	if apiKey == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnauthorized)
-		_, _ = w.Write(jsonError("unauthorized"))
-		return
-	}
-
-	domains, err := DB.GetAllDomains()
-	if err != nil {
-		log.WithFields(log.Fields{"error": err.Error()}).Error("Error fetching domains")
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write(jsonError("db_error"))
-		return
-	}
-
-	var response []DomainResponse
-	for _, domain := range domains {
-		resp := DomainResponse{
-			Username:   domain.Username.String(),
-			Fulldomain: domain.Fulldomain,
-			Subdomain:  domain.Subdomain,
-			Allowfrom:  domain.AllowFrom.ValidEntries(),
-			DomainName: domain.DomainName,
-			CreatedAt:  domain.CreatedAt,
-			UpdatedAt:  domain.UpdatedAt,
-		}
-		response = append(response, resp)
-	}
-
-	respJSON, err := json.Marshal(response)
-	if err != nil {
-		log.WithFields(log.Fields{"error": err.Error()}).Error("Error marshaling domains")
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write(jsonError("json_error"))
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(respJSON)
 }

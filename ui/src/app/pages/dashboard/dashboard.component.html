@@ -1,0 +1,145 @@
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark"><mat-icon>dns</mat-icon></span>
+    <div>
+      <h1>acme-dns</h1>
+      @if (server(); as info) {
+        <p class="faint mono">{{ info.acme_dns_domain }}</p>
+      }
+    </div>
+  </div>
+
+  <div class="topbar-actions">
+    @if (server(); as info) {
+      @if (!info.credential_storage) {
+        <span
+          class="pill pill-warn"
+          matTooltip="auth.credentials_key ist nicht gesetzt — neue Passwörter lassen sich später nicht mehr anzeigen"
+        >
+          Passwortspeicherung aus
+        </span>
+      }
+    }
+    <span class="faint user">{{ auth.username() }}</span>
+    <button mat-icon-button matTooltip="Abmelden" (click)="logout()">
+      <mat-icon>logout</mat-icon>
+    </button>
+  </div>
+</header>
+
+@if (loading()) {
+  <mat-progress-bar mode="indeterminate" />
+}
+
+<main class="content">
+  <div class="toolbar">
+    <div>
+      <h2>Domains</h2>
+      <p class="muted">
+        {{ domains().length }}
+        {{ domains().length === 1 ? 'Registrierung' : 'Registrierungen' }}
+      </p>
+    </div>
+
+    <div class="toolbar-right">
+      <mat-form-field appearance="outline" class="search" subscriptSizing="dynamic">
+        <mat-icon matPrefix>search</mat-icon>
+        <input
+          matInput
+          placeholder="Filtern"
+          [ngModel]="filter()"
+          (ngModelChange)="filter.set($event)"
+        />
+      </mat-form-field>
+
+      <button mat-icon-button matTooltip="Neu laden" (click)="reload()">
+        <mat-icon>refresh</mat-icon>
+      </button>
+
+      <button mat-flat-button color="primary" (click)="create()">
+        <mat-icon>add</mat-icon>
+        Neue Domain
+      </button>
+    </div>
+  </div>
+
+  @if (loadError(); as message) {
+    <p class="banner banner-danger" role="alert">
+      <mat-icon>error_outline</mat-icon>
+      <span>{{ message }}</span>
+    </p>
+  }
+
+  @if (!loading() && domains().length === 0) {
+    <section class="empty surface">
+      <mat-icon>rocket_launch</mat-icon>
+      <h3>Noch keine Domain angelegt</h3>
+      <p class="muted">
+        Eine Domain anlegen, den erzeugten CNAME einmalig in der Zone eintragen, Zugangsdaten in
+        Traefik oder certbot hinterlegen — danach laufen alle Zertifikate automatisch.
+      </p>
+      <button mat-flat-button color="primary" (click)="create()">
+        <mat-icon>add</mat-icon>
+        Erste Domain anlegen
+      </button>
+    </section>
+  } @else if (!loading() && visibleDomains().length === 0) {
+    <p class="muted no-match">Keine Registrierung passt zum Filter „{{ filter() }}“.</p>
+  } @else {
+    <ul class="domain-list">
+      @for (domain of visibleDomains(); track domain.subdomain) {
+        <li class="domain-row surface">
+          <button class="domain-main" type="button" (click)="openDetails(domain)">
+            <span class="domain-name">
+              {{ domain.domain_name || '(ohne Namen)' }}
+            </span>
+            <span class="domain-target mono faint">{{ domain.fulldomain }}</span>
+          </button>
+
+          <div class="domain-status">
+            @if (domain.last_active) {
+              <span class="pill pill-ok" matTooltip="Zuletzt wurde ein TXT-Wert geschrieben">
+                aktiv · {{ domain.last_active * 1000 | date: 'dd.MM.yy' }}
+              </span>
+            } @else {
+              <span class="pill pill-neutral" matTooltip="Es wurde noch nie ein TXT-Wert gesetzt">
+                ungenutzt
+              </span>
+            }
+            @if (!domain.credentials_available) {
+              <span class="pill pill-warn" matTooltip="Passwort nicht wiederherstellbar">
+                kein Passwort
+              </span>
+            }
+          </div>
+
+          <div class="domain-actions">
+            <button
+              mat-icon-button
+              matTooltip="CNAME-Ziel kopieren"
+              (click)="copy.copy(domain.fulldomain + '.', 'Ziel kopiert')"
+            >
+              <mat-icon>content_copy</mat-icon>
+            </button>
+            <button mat-icon-button matTooltip="DNS prüfen" (click)="checkDns(domain)">
+              <mat-icon>radar</mat-icon>
+            </button>
+            <button mat-icon-button [matMenuTriggerFor]="menu" matTooltip="Weitere Aktionen">
+              <mat-icon>more_vert</mat-icon>
+            </button>
+            <mat-menu #menu="matMenu">
+              <button mat-menu-item (click)="openDetails(domain)">
+                <mat-icon>tune</mat-icon>
+                Details & Vorlagen
+              </button>
+              <button mat-menu-item (click)="remove(domain)">
+                <mat-icon>delete_outline</mat-icon>
+                Löschen
+              </button>
+            </mat-menu>
+          </div>
+        </li>
+      }
+    </ul>
+  }
+</main>

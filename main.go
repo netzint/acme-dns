@@ -24,7 +24,15 @@ func main() {
 	// Created files are not world writable
 	syscall.Umask(0077)
 	configPtr := flag.String("c", "/etc/acme-dns/config.cfg", "config file location")
+	hashPwPtr := flag.Bool("hashpw", false, "read a password from stdin and print its bcrypt hash for auth.admin_password_hash")
 	flag.Parse()
+	if *hashPwPtr {
+		if err := printPasswordHash(); err != nil {
+			log.Errorf("Could not hash password: %s", err)
+			os.Exit(1)
+		}
+		return
+	}
 	// Read global config
 	var err error
 	if fileIsAccessible(*configPtr) {
@@ -43,6 +51,21 @@ func main() {
 	}
 
 	setupLogging(Config.Logconfig.Format, Config.Logconfig.Level)
+
+	// Optional recoverable credential storage for the management UI
+	if Config.Auth.CredentialsKey != "" {
+		CredentialCipher, err = newCredentialCipher(Config.Auth.CredentialsKey)
+		if err != nil {
+			log.Errorf("Could not initialise credential encryption: %s", err)
+			os.Exit(1)
+		}
+		log.Info("Credential storage enabled, generated passwords are recoverable through the management UI")
+	}
+	if adminEnabled() {
+		log.WithFields(log.Fields{"user": Config.Auth.AdminUser}).Info("Management API enabled")
+	} else {
+		log.Info("Management API disabled (set auth.admin_user and auth.admin_password_hash to enable it)")
+	}
 
 	// Open database
 	newDB := new(acmedb)
@@ -115,7 +138,8 @@ func startHTTPAPI(errChan chan error, config DNSConfig, dnsservers []*DNSServer)
 	api := httprouter.New()
 	c := cors.New(cors.Options{
 		AllowedOrigins:     Config.API.CorsOrigins,
-		AllowedMethods:     []string{"GET", "POST"},
+		AllowedMethods:     []string{"GET", "POST", "DELETE", "OPTIONS"},
+		AllowedHeaders:     []string{"Accept", "Authorization", "Content-Type", "X-Api-User", "X-Api-Key", "X-Admin-Token"},
 		OptionsPassthrough: false,
 		Debug:              Config.General.Debug,
 	})
@@ -123,91 +147,37 @@ func startHTTPAPI(errChan chan error, config DNSConfig, dnsservers []*DNSServer)
 		// Logwriter for saner log output
 		c.Log = stdlog.New(logwriter, "", 0)
 	}
+
+	// Plain acme-dns API, unchanged and compatible with every acme-dns client
 	if !Config.API.DisableRegistration {
 		api.POST("/register", webRegisterPost)
 	}
 	api.POST("/update", Auth(webUpdatePost))
-	api.GET("/domains", webGetDomains)
 	api.GET("/health", healthCheck)
-	api.POST("/dnscheck", webDNSCheck)
-	api.POST("/updatename", webUpdateName)
-	
-	// Optional: Serve UI if directory exists  
-	uiPath := "/usr/share/acme-dns-ui"
-	var handler http.Handler
-	if _, err := os.Stat(uiPath); err == nil {
-		// Serve UI using custom handler for static files
-		api.GET("/", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-			http.Redirect(w, r, "/ui/", http.StatusMovedPermanently)
-		})
-		
-		// Serve UI files under /ui path
-		api.GET("/ui/*filepath", func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-			filepath := ps.ByName("filepath")
-			if filepath == "/" || filepath == "" {
-				filepath = "/index.html"
-			}
-			
-			// Check if file exists
-			fullPath := uiPath + filepath
-			if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-				// For Angular routing, serve index.html for non-asset paths
-				if !strings.Contains(filepath, ".") {
-					fullPath = uiPath + "/index.html"
-					filepath = "/index.html"
-				}
-			}
-			
-			// Set proper content type based on file extension
-			if strings.HasSuffix(filepath, ".js") {
-				w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-			} else if strings.HasSuffix(filepath, ".css") {
-				w.Header().Set("Content-Type", "text/css; charset=utf-8")
-			} else if strings.HasSuffix(filepath, ".html") {
-				w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			} else if strings.HasSuffix(filepath, ".json") {
-				w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			} else if strings.HasSuffix(filepath, ".svg") {
-				w.Header().Set("Content-Type", "image/svg+xml")
-			} else if strings.HasSuffix(filepath, ".ico") {
-				w.Header().Set("Content-Type", "image/x-icon")
-			} else if strings.HasSuffix(filepath, ".png") {
-				w.Header().Set("Content-Type", "image/png")
-			} else if strings.HasSuffix(filepath, ".woff2") {
-				w.Header().Set("Content-Type", "font/woff2")
-			} else if strings.HasSuffix(filepath, ".woff") {
-				w.Header().Set("Content-Type", "font/woff")
-			}
-			
-			http.ServeFile(w, r, fullPath)
-		})
-		
-		// Create a custom handler that wraps httprouter and serves static files from root
-		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Check if this is a request for a static asset from root
-			if strings.HasSuffix(r.URL.Path, ".js") || 
-			   strings.HasSuffix(r.URL.Path, ".css") || 
-			   strings.HasSuffix(r.URL.Path, ".ico") {
-				fullPath := uiPath + r.URL.Path
-				if _, err := os.Stat(fullPath); err == nil {
-					// Set proper content type
-					if strings.HasSuffix(r.URL.Path, ".js") {
-						w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-					} else if strings.HasSuffix(r.URL.Path, ".css") {
-						w.Header().Set("Content-Type", "text/css; charset=utf-8")
-					} else if strings.HasSuffix(r.URL.Path, ".ico") {
-						w.Header().Set("Content-Type", "image/x-icon")
-					}
-					http.ServeFile(w, r, fullPath)
-					return
-				}
-			}
-			// Otherwise pass to httprouter
-			api.ServeHTTP(w, r)
-		})
+
+	// Management API. Every endpoint requires a session token from /api/admin/login.
+	if adminEnabled() {
+		api.POST("/api/admin/login", webAdminLogin)
+		api.POST("/api/admin/logout", AdminAuth(webAdminLogout))
+		api.GET("/api/admin/session", AdminAuth(webAdminSession))
+		api.GET("/api/admin/server", AdminAuth(webAdminServerInfo))
+		api.GET("/api/admin/domains", AdminAuth(webAdminListDomains))
+		api.POST("/api/admin/domains", AdminAuth(webAdminCreateDomain))
+		api.POST("/api/admin/domains/:subdomain/name", AdminAuth(webAdminRenameDomain))
+		api.POST("/api/admin/domains/:subdomain/rotate", AdminAuth(webAdminRotateCredentials))
+		api.DELETE("/api/admin/domains/:subdomain", AdminAuth(webAdminDeleteDomain))
+		api.POST("/api/admin/dnscheck", AdminAuth(webDNSCheck))
+	}
+
+	// Serve the management UI from the root path when it has been built into the
+	// image. Unknown paths fall through to the SPA so Angular routing works on
+	// a hard refresh.
+	var handler http.Handler = api
+	if uiAvailable() {
+		log.WithFields(log.Fields{"path": Config.API.UIPath}).Info("Serving management UI")
+		api.NotFound = spaFileServer(Config.API.UIPath)
 	} else {
-		// No UI, just use the API router
-		handler = api
+		log.WithFields(log.Fields{"path": Config.API.UIPath}).Info("No management UI found, serving API only")
 	}
 
 	host := Config.API.IP + ":" + Config.API.Port

@@ -18,7 +18,10 @@ import (
 )
 
 // DBVersion shows the database version this code uses. This is used for update checks.
-var DBVersion = 2
+var DBVersion = 3
+
+// errNoSuchDomain is returned when a subdomain is not present in the records table
+var errNoSuchDomain = errors.New("no such domain")
 
 var acmeTable = `
 	CREATE TABLE IF NOT EXISTS acmedns(
@@ -34,7 +37,8 @@ var userTable = `
 		AllowFrom TEXT,
 		DomainName TEXT DEFAULT '',
 		CreatedAt INT DEFAULT 0,
-		UpdatedAt INT DEFAULT 0
+		UpdatedAt INT DEFAULT 0,
+		EncPassword TEXT DEFAULT ''
     );`
 
 var txtTable = `
@@ -115,8 +119,62 @@ func (d *acmedb) handleDBUpgrades(version int) error {
 		version = 1
 	}
 	if version == 1 {
-		return d.handleDBUpgradeTo2()
+		err := d.handleDBUpgradeTo2()
+		if err != nil {
+			return err
+		}
+		version = 2
 	}
+	if version == 2 {
+		return d.handleDBUpgradeTo3()
+	}
+	return nil
+}
+
+// handleDBUpgradeTo3 adds the column holding the encrypted, recoverable copy of
+// the generated API password. Records created before this upgrade keep an empty
+// value and have to be rotated before the UI can show their credentials again.
+func (d *acmedb) handleDBUpgradeTo3() error {
+	log.Info("Upgrading database to version 3: Adding EncPassword column")
+
+	tx, err := d.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+			return
+		}
+		_ = tx.Commit()
+	}()
+
+	if Config.Database.Engine == "sqlite3" {
+		var count int
+		err = tx.QueryRow("SELECT COUNT(*) FROM pragma_table_info('records') WHERE name='EncPassword'").Scan(&count)
+		if err != nil || count == 0 {
+			_, err = tx.Exec("ALTER TABLE records ADD COLUMN EncPassword TEXT DEFAULT ''")
+			if err != nil && !strings.Contains(err.Error(), "duplicate column") {
+				log.WithFields(log.Fields{"error": err.Error()}).Error("Error adding EncPassword column")
+				return err
+			}
+			err = nil
+		}
+	} else {
+		_, err = tx.Exec("ALTER TABLE records ADD COLUMN IF NOT EXISTS EncPassword TEXT DEFAULT ''")
+		if err != nil {
+			log.WithFields(log.Fields{"error": err.Error()}).Error("Error adding EncPassword column")
+			return err
+		}
+	}
+
+	_, err = tx.Exec("UPDATE acmedns SET Value='3' WHERE Name='db_version'")
+	if err != nil {
+		log.WithFields(log.Fields{"error": err.Error()}).Error("Error updating database version")
+		return err
+	}
+
+	log.Info("Database upgraded to version 3 successfully")
 	return nil
 }
 
@@ -174,12 +232,12 @@ func (d *acmedb) handleDBUpgradeTo1() error {
 
 func (d *acmedb) handleDBUpgradeTo2() error {
 	log.Info("Upgrading database to version 2: Adding DomainName, CreatedAt, UpdatedAt columns")
-	
+
 	tx, err := d.DB.Begin()
 	if err != nil {
 		return err
 	}
-	
+
 	// Rollback if errored, commit if not
 	defer func() {
 		if err != nil {
@@ -188,7 +246,7 @@ func (d *acmedb) handleDBUpgradeTo2() error {
 		}
 		_ = tx.Commit()
 	}()
-	
+
 	// Add new columns if they don't exist
 	// For SQLite, we need to check if columns exist first
 	if Config.Database.Engine == "sqlite3" {
@@ -203,7 +261,7 @@ func (d *acmedb) handleDBUpgradeTo2() error {
 				return err
 			}
 		}
-		
+
 		err = tx.QueryRow("SELECT COUNT(*) FROM pragma_table_info('records') WHERE name='CreatedAt'").Scan(&count)
 		if err != nil || count == 0 {
 			_, err = tx.Exec("ALTER TABLE records ADD COLUMN CreatedAt INT DEFAULT 0")
@@ -212,7 +270,7 @@ func (d *acmedb) handleDBUpgradeTo2() error {
 				return err
 			}
 		}
-		
+
 		err = tx.QueryRow("SELECT COUNT(*) FROM pragma_table_info('records') WHERE name='UpdatedAt'").Scan(&count)
 		if err != nil || count == 0 {
 			_, err = tx.Exec("ALTER TABLE records ADD COLUMN UpdatedAt INT DEFAULT 0")
@@ -239,14 +297,14 @@ func (d *acmedb) handleDBUpgradeTo2() error {
 			return err
 		}
 	}
-	
+
 	// Update version
 	_, err = tx.Exec("UPDATE acmedns SET Value='2' WHERE Name='db_version'")
 	if err != nil {
 		log.WithFields(log.Fields{"error": err.Error()}).Error("Error updating database version")
 		return err
 	}
-	
+
 	log.Info("Database upgraded to version 2 successfully")
 	return nil
 }
@@ -291,8 +349,9 @@ func (d *acmedb) RegisterWithName(afrom cidrslice, domainName string) (ACMETxt, 
 		AllowFrom,
 		DomainName,
 		CreatedAt,
-		UpdatedAt) 
-        values($1, $2, $3, $4, $5, $6, $7)`
+		UpdatedAt,
+		EncPassword)
+        values($1, $2, $3, $4, $5, $6, $7, $8)`
 	if Config.Database.Engine == "sqlite3" {
 		regSQL = getSQLiteStmt(regSQL)
 	}
@@ -302,7 +361,7 @@ func (d *acmedb) RegisterWithName(afrom cidrslice, domainName string) (ACMETxt, 
 		return a, errors.New("SQL error")
 	}
 	defer sm.Close()
-	_, err = sm.Exec(a.Username.String(), passwordHash, a.Subdomain, a.AllowFrom.JSON(), a.DomainName, a.CreatedAt, a.UpdatedAt)
+	_, err = sm.Exec(a.Username.String(), passwordHash, a.Subdomain, a.AllowFrom.JSON(), a.DomainName, a.CreatedAt, a.UpdatedAt, encryptCredential(a.Password))
 	if err == nil {
 		err = d.NewTXTValuesInTransaction(tx, a.Subdomain)
 	}
@@ -313,30 +372,36 @@ func (d *acmedb) RegisterWithName(afrom cidrslice, domainName string) (ACMETxt, 
 func (d *acmedb) UpdateDomainName(subdomain string, domainName string) error {
 	d.Mutex.Lock()
 	defer d.Mutex.Unlock()
-	
+
 	query := `UPDATE records SET DomainName = $1, UpdatedAt = $2 WHERE Subdomain = $3`
 	if Config.Database.Engine == "sqlite3" {
 		query = getSQLiteStmt(query)
 	}
-	
+
 	_, err := d.DB.Exec(query, domainName, time.Now().Unix(), subdomain)
 	if err != nil {
 		return err
 	}
-	
+
 	return nil
 }
 
+// GetAllDomains returns every registration for the management UI. The returned
+// Password is the decrypted plaintext when credential storage is enabled and the
+// record was created after it was turned on; otherwise it is empty and the
+// caller has to offer a credential rotation instead.
 func (d *acmedb) GetAllDomains() ([]ACMETxt, error) {
 	d.Mutex.Lock()
 	defer d.Mutex.Unlock()
 	var results []ACMETxt
 	getSQL := `
-	SELECT Username, Password, Subdomain, AllowFrom, 
-	       COALESCE(DomainName, '') as DomainName,
-	       COALESCE(CreatedAt, 0) as CreatedAt,
-	       COALESCE(UpdatedAt, 0) as UpdatedAt
-	FROM records
+	SELECT r.Username, r.Subdomain, r.AllowFrom,
+	       COALESCE(r.DomainName, ''),
+	       COALESCE(r.CreatedAt, 0),
+	       COALESCE(r.UpdatedAt, 0),
+	       COALESCE(r.EncPassword, ''),
+	       COALESCE((SELECT MAX(t.LastUpdate) FROM txt t WHERE t.Subdomain = r.Subdomain), 0)
+	FROM records r
 	`
 	rows, err := d.DB.Query(getSQL)
 	if err != nil {
@@ -346,20 +411,119 @@ func (d *acmedb) GetAllDomains() ([]ACMETxt, error) {
 	for rows.Next() {
 		txt := ACMETxt{}
 		afrom := ""
-		err = rows.Scan(&txt.Username, &txt.Password, &txt.Subdomain, &afrom, 
-			&txt.DomainName, &txt.CreatedAt, &txt.UpdatedAt)
+		encPassword := ""
+		err = rows.Scan(&txt.Username, &txt.Subdomain, &afrom,
+			&txt.DomainName, &txt.CreatedAt, &txt.UpdatedAt, &encPassword, &txt.LastActive)
 		if err != nil {
 			log.WithFields(log.Fields{"error": err.Error()}).Error("Database error in GetAllDomains")
 			return results, err
 		}
-		txt.AllowFrom.Unmarshal(afrom)
-		// Clear password hash for security
-		txt.Password = ""
-		// Add fulldomain
+		_ = txt.AllowFrom.Unmarshal(afrom)
+		// Never expose the bcrypt hash; hand out the recoverable copy instead
+		txt.Password = decryptCredential(encPassword)
 		txt.Fulldomain = txt.Subdomain + "." + Config.General.Domain
 		results = append(results, txt)
 	}
-	return results, nil
+	return results, rows.Err()
+}
+
+// GetBySubdomain looks up a single registration by its subdomain. Like
+// GetAllDomains it returns the decrypted password rather than the bcrypt hash.
+func (d *acmedb) GetBySubdomain(subdomain string) (ACMETxt, error) {
+	d.Mutex.Lock()
+	defer d.Mutex.Unlock()
+	getSQL := `
+	SELECT r.Username, r.Subdomain, r.AllowFrom,
+	       COALESCE(r.DomainName, ''),
+	       COALESCE(r.CreatedAt, 0),
+	       COALESCE(r.UpdatedAt, 0),
+	       COALESCE(r.EncPassword, ''),
+	       COALESCE((SELECT MAX(t.LastUpdate) FROM txt t WHERE t.Subdomain = r.Subdomain), 0)
+	FROM records r
+	WHERE r.Subdomain=$1 LIMIT 1
+	`
+	if Config.Database.Engine == "sqlite3" {
+		getSQL = getSQLiteStmt(getSQL)
+	}
+	txt := ACMETxt{}
+	afrom := ""
+	encPassword := ""
+	err := d.DB.QueryRow(getSQL, subdomain).Scan(&txt.Username, &txt.Subdomain, &afrom,
+		&txt.DomainName, &txt.CreatedAt, &txt.UpdatedAt, &encPassword, &txt.LastActive)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return ACMETxt{}, errNoSuchDomain
+		}
+		return ACMETxt{}, err
+	}
+	_ = txt.AllowFrom.Unmarshal(afrom)
+	txt.Password = decryptCredential(encPassword)
+	txt.Fulldomain = txt.Subdomain + "." + Config.General.Domain
+	return txt, nil
+}
+
+// DeleteDomain removes a registration and its TXT rows for good. The CNAME
+// pointing at it stops resolving afterwards, so the UI confirms this first.
+func (d *acmedb) DeleteDomain(subdomain string) error {
+	d.Mutex.Lock()
+	defer d.Mutex.Unlock()
+	tx, err := d.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+			return
+		}
+		_ = tx.Commit()
+	}()
+
+	delRecords := `DELETE FROM records WHERE Subdomain=$1`
+	delTxt := `DELETE FROM txt WHERE Subdomain=$1`
+	if Config.Database.Engine == "sqlite3" {
+		delRecords = getSQLiteStmt(delRecords)
+		delTxt = getSQLiteStmt(delTxt)
+	}
+	var res sql.Result
+	res, err = tx.Exec(delRecords, subdomain)
+	if err != nil {
+		return err
+	}
+	affected, aerr := res.RowsAffected()
+	if aerr == nil && affected == 0 {
+		err = errNoSuchDomain
+		return err
+	}
+	_, err = tx.Exec(delTxt, subdomain)
+	return err
+}
+
+// RotatePassword issues a fresh API password for an existing subdomain and
+// returns the new plaintext. The subdomain and therefore the customer CNAME
+// stays valid; only the client credentials have to be updated.
+func (d *acmedb) RotatePassword(subdomain string) (string, error) {
+	d.Mutex.Lock()
+	defer d.Mutex.Unlock()
+
+	password := generatePassword(40)
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), 10)
+	if err != nil {
+		return "", err
+	}
+	updSQL := `UPDATE records SET Password=$1, EncPassword=$2, UpdatedAt=$3 WHERE Subdomain=$4`
+	if Config.Database.Engine == "sqlite3" {
+		updSQL = getSQLiteStmt(updSQL)
+	}
+	res, err := d.DB.Exec(updSQL, string(passwordHash), encryptCredential(password), time.Now().Unix(), subdomain)
+	if err != nil {
+		return "", err
+	}
+	affected, err := res.RowsAffected()
+	if err == nil && affected == 0 {
+		return "", errNoSuchDomain
+	}
+	return password, nil
 }
 
 func (d *acmedb) GetByUsername(u uuid.UUID) (ACMETxt, error) {

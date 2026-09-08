@@ -41,14 +41,14 @@ clean:
 ## docker-build: Build Docker image
 docker-build:
 	@echo "Building Docker image..."
-	docker build -f Dockerfile.improved -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
+	docker build -f Dockerfile.combined -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
 
 ## docker-build-multi: Build multi-platform Docker image (currently only amd64)
 docker-build-multi:
 	@echo "Building Docker image for amd64..."
 	docker buildx build \
 		--platform linux/amd64 \
-		-f Dockerfile.improved \
+		-f Dockerfile.combined \
 		-t $(DOCKER_IMAGE):$(DOCKER_TAG) \
 		.
 

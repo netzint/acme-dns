@@ -1,23 +1,59 @@
 @use '@angular/material' as mat;
 
-@include mat.core();
+/* ---------------------------------------------------------------------------
+   Design tokens
+   A dark, technical console: one neutral ramp, one accent, semantic colours
+   reserved for the DNS check verdicts so a green row always means "verified".
+   ------------------------------------------------------------------------ */
+:root {
+  --bg: #0b0f14;
+  --bg-elevated: #121821;
+  --bg-raised: #18202b;
+  --bg-inset: #0d131a;
 
-// Custom color palette for blue accent
-$acme-dns-blue: (
-  50: #e2f0fa,
-  100: #b6daf2,
-  200: #85c1ea,
-  300: #54a8e1,
-  400: #2f96da,
-  500: #0d81c4,
-  600: #0b74b8,
-  700: #0963a7,
-  800: #075397,
-  900: #033677,
-  A100: #cce6ff,
-  A200: #99cdff,
-  A400: #66b3ff,
-  A700: #4da6ff,
+  --border: #223041;
+  --border-strong: #2f4157;
+
+  --text: #e6edf5;
+  --text-muted: #8da2b8;
+  --text-faint: #5f7386;
+
+  --accent: #38bdf8;
+  --accent-strong: #0ea5e9;
+  --accent-dim: rgba(56, 189, 248, 0.12);
+
+  --ok: #4ade80;
+  --ok-dim: rgba(74, 222, 128, 0.12);
+  --warn: #fbbf24;
+  --warn-dim: rgba(251, 191, 36, 0.12);
+  --danger: #f87171;
+  --danger-dim: rgba(248, 113, 113, 0.12);
+
+  --radius: 10px;
+  --radius-sm: 6px;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, Consolas, 'Liberation Mono',
+    monospace;
+}
+
+/* Material theme -------------------------------------------------------- */
+$accent-palette: (
+  50: #e8f7fe,
+  100: #c2eafc,
+  200: #94dbfa,
+  300: #66ccf7,
+  400: #38bdf8,
+  500: #0ea5e9,
+  600: #0d94d1,
+  700: #0b7cb0,
+  800: #09648f,
+  900: #064866,
+  A100: #c2eafc,
+  A200: #94dbfa,
+  A400: #38bdf8,
+  A700: #0ea5e9,
   contrast: (
     50: rgba(black, 0.87),
     100: rgba(black, 0.87),
@@ -33,196 +69,214 @@ $acme-dns-blue: (
     A200: rgba(black, 0.87),
     A400: rgba(black, 0.87),
     A700: white,
+  ),
+);
+
+@include mat.core();
+
+$theme: mat.m2-define-dark-theme(
+  (
+    color: (
+      primary: mat.m2-define-palette($accent-palette, 400, 300, 600),
+      accent: mat.m2-define-palette($accent-palette, 500, 400, 700),
+      warn: mat.m2-define-palette(mat.$m2-red-palette),
+    ),
+    density: -1,
   )
 );
 
-// Define palettes
-$acme-dns-primary: mat.m2-define-palette($acme-dns-blue, 500, 400, 700);
-$acme-dns-accent: mat.m2-define-palette($acme-dns-blue, 400, 300, 600);
-$acme-dns-warn: mat.m2-define-palette(mat.$m2-red-palette);
+@include mat.all-component-themes($theme);
 
-// Define dark theme
-$acme-dns-theme: mat.m2-define-dark-theme((
-  color: (
-    primary: $acme-dns-primary,
-    accent: $acme-dns-accent,
-    warn: $acme-dns-warn,
-  ),
-  typography: mat.m2-define-typography-config(),
-  density: 0
-));
-
-@include mat.all-component-themes($acme-dns-theme);
-
-// Global styles
-html, body { 
-  height: 100%; 
-  margin: 0;
-  padding: 0;
-}
-
-body { 
-  font-family: Roboto, "Helvetica Neue", sans-serif; 
-  background-color: #0d0d0d;
-  color: #ffffff;
-}
-
-* {
+/* Base ------------------------------------------------------------------ */
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
-// Dark theme overrides
-.mat-mdc-dialog-container {
-  --mdc-dialog-container-color: #1a1a1a;
-  --mdc-dialog-subhead-color: #ffffff;
-  --mdc-dialog-supporting-text-color: rgba(255, 255, 255, 0.87);
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+code,
+pre,
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+}
+
+/* Shared building blocks ------------------------------------------------ */
+.surface {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.faint {
+  color: var(--text-faint);
+}
+
+/* A copyable code block with its own copy affordance. */
+.code-block {
+  position: relative;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 48px 12px 14px;
+  /* Wrap instead of scrolling: config snippets stay fully visible and the copy
+     button never sits on top of hidden text. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  margin: 0;
+  tab-size: 4;
+
+  .copy-button {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+  }
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid transparent;
+
+  &.pill-ok {
+    background: var(--ok-dim);
+    color: var(--ok);
+    border-color: rgba(74, 222, 128, 0.3);
+  }
+
+  &.pill-warn {
+    background: var(--warn-dim);
+    color: var(--warn);
+    border-color: rgba(251, 191, 36, 0.3);
+  }
+
+  &.pill-danger {
+    background: var(--danger-dim);
+    color: var(--danger);
+    border-color: rgba(248, 113, 113, 0.3);
+  }
+
+  &.pill-neutral {
+    background: rgba(141, 162, 184, 0.1);
+    color: var(--text-muted);
+    border-color: var(--border);
+  }
+}
+
+/* Material overrides ---------------------------------------------------- */
+.mat-mdc-dialog-surface,
+.mat-mdc-dialog-container .mdc-dialog__surface {
+  background: var(--bg-elevated) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border);
+  border-radius: var(--radius) !important;
+}
+
+.mat-mdc-dialog-title {
+  color: var(--text) !important;
+  font-family: var(--font-sans) !important;
+  letter-spacing: -0.01em !important;
 }
 
 .mat-mdc-card {
-  --mdc-elevated-card-container-color: #1a1a1a;
-  background-color: #1a1a1a !important;
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border);
+  box-shadow: none !important;
 }
 
-.mat-toolbar {
-  background-color: #1a1a1a !important;
-  border-bottom: 1px solid #2a2a2a;
-}
-
-.mat-mdc-table {
-  background-color: #1a1a1a !important;
-  
-  .mat-mdc-header-row {
-    background-color: #2a2a2a !important;
-  }
-  
-  .mat-mdc-row:hover {
-    background-color: rgba(13, 129, 196, 0.1) !important;
-  }
-}
-
-// Form fields
-.mat-mdc-form-field {
-  --mdc-filled-text-field-container-color: #2a2a2a;
-  --mdc-filled-text-field-label-text-color: rgba(255, 255, 255, 0.6);
-  --mdc-filled-text-field-input-text-color: #ffffff;
-  --mdc-filled-text-field-hover-label-text-color: #0d81c4;
-  --mdc-filled-text-field-focus-label-text-color: #0d81c4;
-  --mat-form-field-focus-select-arrow-color: #0d81c4;
-}
-
-// Outline appearance
-.mat-mdc-form-field-appearance-outline {
-  .mdc-notched-outline__leading,
-  .mdc-notched-outline__notch,
-  .mdc-notched-outline__trailing {
-    border-color: rgba(255, 255, 255, 0.3) !important;
-  }
-  
-  &:hover {
-    .mdc-notched-outline__leading,
-    .mdc-notched-outline__notch,
-    .mdc-notched-outline__trailing {
-      border-color: rgba(255, 255, 255, 0.5) !important;
-    }
-  }
-  
-  &.mat-focused {
-    .mdc-notched-outline__leading,
-    .mdc-notched-outline__notch,
-    .mdc-notched-outline__trailing {
-      border-color: #0d81c4 !important;
-      border-width: 2px !important;
-    }
-  }
-}
-
-// Snackbar
 .mat-mdc-snack-bar-container {
-  --mdc-snackbar-container-color: #2a2a2a;
-  --mdc-snackbar-supporting-text-color: #ffffff;
-  
-  &.mat-snack-bar-center {
-    margin: 0 auto;
-  }
-  
+  --mdc-snackbar-container-color: #1d2733;
+  --mdc-snackbar-supporting-text-color: var(--text);
+
   .mat-mdc-snack-bar-action {
-    color: #0d81c4 !important;
+    color: var(--accent) !important;
   }
 }
 
-// Scrollbar
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+.mat-mdc-tab-group,
+.mat-mdc-tab-header {
+  --mdc-secondary-navigation-tab-container-height: 42px;
 }
 
-::-webkit-scrollbar-track {
-  background: #1a1a1a;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #2a2a2a;
-  border-radius: 4px;
-  
-  &:hover {
-    background: #0d81c4;
-  }
-}
-
-// Utility classes
-.full-width {
-  width: 100% !important;
-}
-
-.text-center {
-  text-align: center;
-}
-
-// Custom button styles
-.mat-mdc-raised-button {
-  &.mat-primary {
-    background-color: #0d81c4 !important;
-    
-    &:hover:not(:disabled) {
-      background-color: #0b74b8 !important;
-    }
-  }
-  
-  &.mat-accent {
-    background-color: #2f96da !important;
-    
-    &:hover:not(:disabled) {
-      background-color: #54a8e1 !important;
-    }
-  }
-  
-  // Fix icon alignment
-  .mat-icon {
-    vertical-align: middle !important;
-    margin-top: -2px;
-  }
-}
-
-// Fix icon alignment in all buttons
 .mat-mdc-button,
 .mat-mdc-raised-button,
 .mat-mdc-outlined-button,
-.mat-mdc-flat-button {
+.mat-mdc-unelevated-button {
+  letter-spacing: 0 !important;
+  font-family: var(--font-sans) !important;
+  font-weight: 500 !important;
+
   .mat-icon {
-    vertical-align: middle !important;
-    line-height: inherit !important;
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+    line-height: 18px;
+    margin-right: 6px;
+    vertical-align: middle;
   }
 }
 
-// Icon buttons
-.mat-mdc-icon-button {
-  &:hover:not(:disabled) {
-    background-color: rgba(13, 129, 196, 0.1);
-  }
+.mat-mdc-icon-button .mat-icon {
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+  line-height: 20px;
 }
 
-// Dialog surface
-.mat-mdc-dialog-surface {
-  background-color: #1a1a1a !important;
-  color: #ffffff !important;
+.mat-mdc-form-field {
+  width: 100%;
+  font-family: var(--font-sans);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 5px;
+  border: 2px solid var(--bg);
+
+  &:hover {
+    background: var(--text-faint);
+  }
 }

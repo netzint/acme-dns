@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"crypto/rand"
 	"errors"
 	"fmt"
@@ -11,7 +12,30 @@ import (
 
 	"github.com/BurntSushi/toml"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/crypto/bcrypt"
 )
+
+// printPasswordHash reads a password from stdin and prints the bcrypt hash to
+// paste into auth.admin_password_hash. Backs the "-hashpw" flag.
+func printPasswordHash() error {
+	fmt.Fprint(os.Stderr, "Password: ")
+	reader := bufio.NewReader(os.Stdin)
+	line, err := reader.ReadString('\n')
+	if err != nil && line == "" {
+		return err
+	}
+	password := strings.TrimRight(line, "\r\n")
+	if password == "" {
+		return errors.New("empty password")
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintln(os.Stderr)
+	fmt.Println(string(hash))
+	return nil
+}
 
 func jsonError(message string) []byte {
 	return []byte(fmt.Sprintf("{\"error\": \"%s\"}", message))
@@ -52,6 +76,12 @@ func prepareConfig(conf DNSConfig) (DNSConfig, error) {
 	// Default values for options added to config to keep backwards compatibility with old config
 	if conf.API.ACMECacheDir == "" {
 		conf.API.ACMECacheDir = "api-certs"
+	}
+	if conf.API.UIPath == "" {
+		conf.API.UIPath = defaultUIPath
+	}
+	if conf.Auth.AdminUser != "" && conf.Auth.AdminPasswordHash == "" {
+		return conf, errors.New("auth.admin_user is set but auth.admin_password_hash is missing, generate one with: acme-dns -hashpw")
 	}
 
 	return conf, nil
