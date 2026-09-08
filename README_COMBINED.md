@@ -12,6 +12,9 @@ Upstream-Änderungen weiterhin per `git merge upstream/master` übernehmen.
 Der DNS- und der ACME-Teil sind unverändert: jeder acme-dns-Client (Traefik/lego,
 certbot, acme.sh, acme-dns-client) spricht weiter mit `/register` und `/update`.
 
+Wie das technisch funktioniert und welche DNS-Einträge wo stehen müssen, steht mit
+Diagrammen in [docs/funktionsweise.md](docs/funktionsweise.md).
+
 ## Was die Oberfläche macht
 
 1. **Domain anlegen** — erzeugt eine Subdomain samt Zugangsdaten.
