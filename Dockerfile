@@ -3,14 +3,13 @@
 FROM golang:alpine AS builder
 LABEL maintainer="lukas.spitznagel@netzint.de"
 
-RUN apk add --no-cache gcc musl-dev git
-
 WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=1 go build -ldflags="-w -s" -o acme-dns .
+# The sqlite driver is pure Go, so no cgo and no toolchain are needed.
+RUN CGO_ENABLED=0 go build -ldflags="-w -s" -o acme-dns .
 
 FROM alpine:latest
 

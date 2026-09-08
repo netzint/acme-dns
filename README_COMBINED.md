@@ -4,6 +4,11 @@ Fork von [joohoi/acme-dns](https://github.com/joohoi/acme-dns) mit einer Webober
 die den kompletten Weg von „ich brauche ein Zertifikat" bis „die DNS-Einträge stimmen"
 abbildet.
 
+Der Fork folgt der Paketstruktur des Originals (`pkg/acmedns`, `pkg/api`,
+`pkg/database`, `pkg/nameserver`); die Verwaltung liegt in `pkg/api/admin*.go`,
+`pkg/api/dnscheck.go` und `pkg/api/staticui.go`. Dadurch lassen sich
+Upstream-Änderungen weiterhin per `git merge upstream/master` übernehmen.
+
 Der DNS- und der ACME-Teil sind unverändert: jeder acme-dns-Client (Traefik/lego,
 certbot, acme.sh, acme-dns-client) spricht weiter mit `/register` und `/update`.
 
@@ -169,7 +174,7 @@ dort heißt der Schlüssel `allowfrom` statt `server_url`.
 ## Entwicklung
 
 ```bash
-# Backend
+# Backend (kein cgo nötig, der SQLite-Treiber ist pure Go)
 go build -o acme-dns . && ./acme-dns -c config.cfg
 
 # Tests
@@ -193,3 +198,16 @@ Die Tabelle `records` wird beim Start automatisch auf Version 3 migriert (neue S
 `DomainName`, `CreatedAt`, `UpdatedAt`, `EncPassword`). Bestehende Registrierungen
 bleiben erhalten, haben aber kein wiederherstellbares Passwort — die Oberfläche
 kennzeichnet sie und bietet die Rotation an.
+
+Der SQLite-Treiber ist seit dem Upstream-Merge `glebarez/go-sqlite` statt
+`mattn/go-sqlite3`. Das Dateiformat ist identisch, bestehende Datenbanken werden
+unverändert weiterverwendet. Die Engine heißt jetzt `sqlite`; ein altes
+`engine = "sqlite3"` wird beim Start mit einer Warnung automatisch umgesetzt.
+
+## Upstream-Änderungen übernehmen
+
+```bash
+git remote add upstream https://github.com/joohoi/acme-dns.git
+git fetch upstream
+git merge upstream/master
+```
